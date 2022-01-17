@@ -11,7 +11,7 @@
 4.  Websocket port used is set to **3124**, if you're wanting to change this port.. you must do so within the **scheduler.js** file on lines 15 & 58.
 5.  You need a Google Cloud Platform account setup with Google Sheet API, API Key, Client ID, Client Secret.
 6.  In the **.env** file, add `SPREADSHEET_ID=""` with the ID of the spreadsheet you'll be reading from.
-7.  If your token isn't working, delete the **token.json** file and run the app `node .`. Follow the directions it gives you.
+7.  If your token isn't working, delete the **token.json** file and run the app `node .` -- follow the directions it gives you.
 
 ---
 **Running:**
