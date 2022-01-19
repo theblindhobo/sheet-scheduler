@@ -1,7 +1,7 @@
 {
   "name": "sheet-scheduler",
   "version": "1.0.0",
-  "description": "",
+  "description": "*Grabs information from Google Sheet and schedules jobs based on date/time. These jobs always write to a log file (that is used to Switch Scenes in OBS) and they may send Lower Third title information to another application.*",
   "main": "scheduler.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
