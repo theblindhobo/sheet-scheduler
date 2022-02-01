@@ -251,9 +251,9 @@ module.exports = {
                     day: 'numeric'
                   }
                 ).replace(',','').split(' ');
-                let dT = `${d[1]} ${d[0]} ${d[2]}`;
-                rowObj.line1 = (row[6] !== undefined) ? ((row[6] !== '') ? row[6] : `NOW: Demoscene`) : `NOW: Demoscene`;
-                rowObj.line2 = (row[7] !== undefined) ? ((row[7] !== '') ? row[7] : dT) : dT;
+                let dT = `NOW: Demoscene | ${d[1]} ${d[0]} ${d[2]}`;
+                rowObj.line1 = (row[6] !== undefined) ? ((row[6] !== '') ? row[6] : dT) : dT;
+                rowObj.line2 = (row[7] !== undefined) ? ((row[7] !== '') ? row[7] : ' ') : ' ';
                 break;
               default:
                 rowObj.line1 = row[6] ? row[6] : ' ';
