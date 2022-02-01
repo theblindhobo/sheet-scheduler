@@ -196,8 +196,8 @@ module.exports = {
             // send Quick Display titles without logging to file
 
             rowObj.datetime = row[2];
-            rowObj.line1 = row[6] ? row[6] : '';
-            rowObj.line2 = row[7] ? row[7] : '';
+            rowObj.line1 = row[6] ? row[6] : ' ';
+            rowObj.line2 = row[7] ? row[7] : ' ';
 
             fs.writeFileSync('title1.txt', rowObj.line1);
             fs.writeFileSync('title2.txt', rowObj.line2);
@@ -240,7 +240,7 @@ module.exports = {
             rowObj.datetime = row[2];
             rowObj.timezone = (row[3] == 'UTC') ? row[3] : 'UTC';
             rowObj.action = row[4];
-            rowObj.source = (row[5] !== undefined) ? ((row[4] == 'DEMO') ? '' : row[5]) : '';
+            rowObj.source = (row[5] !== undefined) ? ((row[4] == 'DEMO') ? ' ' : row[5]) : ' ';
             switch (rowObj.action) {
               case 'DEMO':
                 const d = new Date(Date.now()).toLocaleDateString('en-US',
@@ -251,13 +251,13 @@ module.exports = {
                     day: 'numeric'
                   }
                 ).replace(',','').split(' ');
-                let dT = `NOW: Demoscene | ${d[1]} ${d[0]} ${d[2]}`;
-                rowObj.line1 = (row[6] !== undefined) ? ((row[6] !== '') ? row[6] : dT) : dT;
-                rowObj.line2 = row[7] ? row[7] : '';
+                let dT = `${d[1]} ${d[0]} ${d[2]}`;
+                rowObj.line1 = (row[6] !== undefined) ? ((row[6] !== '') ? row[6] : `NOW: Demoscene`) : `NOW: Demoscene`;
+                rowObj.line2 = (row[7] !== undefined) ? ((row[7] !== '') ? row[7] : dT) : dT;
                 break;
               default:
-                rowObj.line1 = row[6] ? row[6] : '';
-                rowObj.line2 = row[7] ? row[7] : '';
+                rowObj.line1 = row[6] ? row[6] : ' ';
+                rowObj.line2 = row[7] ? row[7] : ' ';
             }
 
             if(new Date(rowObj.datetime) instanceof Date || rowObj.datetime == 'NOW') {
