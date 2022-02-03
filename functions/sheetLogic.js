@@ -83,7 +83,7 @@ function writeStatusScheduled(sheets, index) {
     spreadsheetId: process.env.SPREADSHEET_ID,
     range: `MASTER SCHEDULE!A${index}`,
   }, (err, res) => {
-    if(err) return console.log('The API returned an error: ' + err);
+    if(err) return console.log('[WRITE STATUS]', index, ' The API returned an error: ' + err);
     if(res.data.values == undefined || res.data.values[0][0] !== 'SCHEDULED') {
       let range = `MASTER SCHEDULE!A${index}`;
       let status = 'SCHEDULED'
@@ -115,7 +115,7 @@ function cleanupStatus(sheets, index) {
     spreadsheetId: process.env.SPREADSHEET_ID,
     range: `MASTER SCHEDULE!A${index}`,
   }, (err, res) => {
-    if(err) return console.log('The API returned an error: ' + err);
+    if(err) return console.log('[CLEANUP STATUS] The API returned an error: ' + err);
 
     let range = `MASTER SCHEDULE!A${index}`;
     let status = ''
@@ -177,9 +177,9 @@ module.exports = {
     const sheets = google.sheets({version: 'v4', auth});
     sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'MASTER SCHEDULE!A2:K',
+      range: 'MASTER SCHEDULE!A2:H',
     }, (err, res) => {
-      if (err) return console.log('The API returned an error: ' + err);
+      if (err) return console.log('[READ] The API returned an error: ' + err);
       const rows = res.data.values;
       if (rows.length) {
 
@@ -192,6 +192,7 @@ module.exports = {
         rows.map((row) => {
           let rowObj = { index: row[0] };
 
+
           if(row[2] == 'DISPLAY' && row[0] == 2) {
             // send Quick Display titles without logging to file
 
@@ -199,8 +200,12 @@ module.exports = {
             rowObj.line1 = row[6] ? row[6] : ' ';
             rowObj.line2 = row[7] ? row[7] : ' ';
 
-            fs.writeFileSync('title1.txt', rowObj.line1);
-            fs.writeFileSync('title2.txt', rowObj.line2);
+            try {
+              fs.writeFileSync('title1.txt', rowObj.line1);
+              fs.writeFileSync('title2.txt', rowObj.line2);
+            } catch(err) {
+              console.log(`\x1b[33m%s\x1b[0m`, `[TITLES]`, `Could not write to title text file.`);
+            }
 
             let displayObj;
             let socket = client ? client : 'closed';
@@ -290,6 +295,7 @@ module.exports = {
                     jobs.push(timestamp);
 
                   }
+
                   // schedule job
                   var j = schedule.scheduleJob(`${timestamp}`, date, function() {
 
@@ -322,9 +328,13 @@ module.exports = {
                       }
                     }
 
-                    // write to title file
-                    fs.writeFileSync('title1.txt', `${rowObj.line1}`);
-                    fs.writeFileSync('title2.txt', `${rowObj.line2}`);
+                    try {
+                      // write to title file
+                      fs.writeFileSync('title1.txt', `${rowObj.line1}`);
+                      fs.writeFileSync('title2.txt', `${rowObj.line2}`);
+                    } catch(err) {
+                      console.log(`\x1b[33m%s\x1b[0m`, `[TITLES]`, `Could not write to title text file.`);
+                    }
 
                     // write to log file
                     let content;
@@ -350,7 +360,11 @@ module.exports = {
                     });
                     writeStatusDone(sheets, rowObj.index);
                   });
-                  writeStatusScheduled(sheets, rowObj.index);
+
+                  if(rowObj.status !== 'SCHEDULED') {
+                    writeStatusScheduled(sheets, rowObj.index);
+                  }
+
                 }
               }
             }
