@@ -3,5 +3,6 @@ credentials.json
 log.txt
 title1.txt
 title2.txt
+schedule.txt
 token.json
 .env

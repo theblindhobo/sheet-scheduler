@@ -173,6 +173,8 @@ function writeNowDatetime(sheets, rowsLength, index, datetime, date) {
 module.exports = {
   sheetLogic: (google, auth, client) => {
     let jobs = []; // only used to compare lists
+    let currSchedule = []; // used to find next 5 scheduled jobs and log to schedule.txt
+
 
     const sheets = google.sheets({version: 'v4', auth});
     sheets.spreadsheets.values.get({
@@ -374,6 +376,10 @@ module.exports = {
               if(!jobs.includes(toTimestamp(`${row[2]} UTC`))) {
                 // how to check if theres multiple exact times
                 cleanupStatus(sheets, row[0]);
+              } else {
+                if(Date.parse(row[2]) !== NaN) {
+                  currSchedule.push(row);
+                }
               }
             } else {
               cleanupStatus(sheets, row[0]);
@@ -408,6 +414,87 @@ module.exports = {
       } else {
         console.log(`\x1b[33m%s\x1b[0m`, `[SCHEDULER]`, `\x1b[33m%s\x1b[0m`, 'No data found.');
       }
+
+      // Sort currSchedule and keep next 5 events
+      var sortedSchedule = currSchedule.sort(function(a,b) {
+        return Date.parse(a[2])-Date.parse(b[2]);
+      });
+      sortedSchedule = sortedSchedule.slice(0, 5)
+      let scheduleLog = [];
+      for(let i = 0; i < sortedSchedule.length; i++) {
+        if(sortedSchedule[i][4] != undefined && sortedSchedule[i][4] !== '') {
+          switch(sortedSchedule[i][4]) {
+            case 'DEMO':
+              // push datetime and 'Demoscene' to log array
+              scheduleLog.push([sortedSchedule[i][2] + sortedSchedule[i][3], `Demoscenes`]);
+              break;
+            case 'VOD':
+              // push datetime and ''
+              scheduleLog.push([sortedSchedule[i][2] + sortedSchedule[i][3], (sortedSchedule[i][6] != undefined && sortedSchedule[i][6] !== '') ? sortedSchedule[i][6].trim() : `VOD`]);
+              break;
+            case 'LIVE':
+              // push datetime and remove 'LIVE:' from line1, then push formatted line1 to log array
+              if(sortedSchedule[i][6] != undefined && sortedSchedule[i][6] !== '') {
+                // console.log(sortedSchedule[i][6]);
+                if(sortedSchedule[i][6].includes('LIVE:')) {
+                  scheduleLog.push([sortedSchedule[i][2] + sortedSchedule[i][3], (sortedSchedule[i][6] != undefined && sortedSchedule[i][6] !== '') ? sortedSchedule[i][6].replace('LIVE:', '').trim() : `LIVE`]);
+                }
+              }
+              break;
+            default:
+              if(sortedSchedule[i][6] != undefined && sortedSchedule[i][6] !== '') {
+                scheduleLog.push([sortedSchedule[i][2] + sortedSchedule[i][3], sortedSchedule[i][6]]);
+              }
+          }
+        }
+      }
+      let finalScheduleLog = [];
+      if(scheduleLog.length > 0) {
+        let prevDate;
+        let tz = '';
+        for(let i = 0; i < scheduleLog.length; i++) {
+          // turn from UTC to EST
+          const dEST = new Intl.DateTimeFormat(undefined, {
+            timeZone: 'America/New_York',
+            timeZoneName: 'short',
+            hourCycle: 'h24',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            weekday: 'short',
+            hour: '2-digit',
+            minute: '2-digit'
+          }).format(Date.parse(scheduleLog[i][0]));
+          switch(dEST.split(',')[2].trim().split(' ')[1]) {
+            case 'GMT+9':
+              tz = `(JST) `;
+              break;
+            default:
+              tz = `(${dEST.split(',')[2].trim().split(' ')[1]}) `;
+          }
+          let currDate = dEST.split(',')[1].trim();
+          let hour = dEST.split(',')[2].trim().split(' ')[0].trim().replace(':', '');
+          hour = (hour.substring(0,2) == '24') ? hour.replace(/^.{2}/g, '00') : hour;
+          // if scheduled job is on same day, only write date once to log
+          if(prevDate == currDate) {
+            finalScheduleLog.push(' ' + hour + ': ' + scheduleLog[i][1])
+          } else {
+            let dayName = dEST.split(',')[0].trim();
+            let monthDay = new Date(dEST.split(',')[1].trim()).toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+            finalScheduleLog.push('| ' + dayName + ' ' + monthDay + ' - ' + hour + ': ' + scheduleLog[i][1])
+            prevDate = currDate;
+          }
+        }
+        // write to schedule.txt
+        try {
+          if(finalScheduleLog.length > 0) {
+            fs.writeFileSync('schedule.txt', ((tz !== '') ? tz : '') + finalScheduleLog.join(' |').slice(2));
+          }
+        } catch(err) {
+          console.log(`\x1b[33m%s\x1b[0m`, `[LOGGER]`, `Could not write schedule to text file.`);
+        }
+      }
+
     });
   }
 }
