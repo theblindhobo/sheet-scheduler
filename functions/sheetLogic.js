@@ -3,6 +3,8 @@ const schedule = require('node-schedule');
 const dotenv = require('dotenv');
 dotenv.config();
 
+var konceptSpacerEmote = 'koncep2P';
+
 let nowIndex; // 'NOW'
 
 var actionArray = ['DEMO', 'LIVE', 'VOD'];
@@ -426,7 +428,7 @@ module.exports = {
           switch(sortedSchedule[i][4]) {
             case 'DEMO':
               // push datetime and 'Demoscene' to log array
-              scheduleLog.push([sortedSchedule[i][2] + sortedSchedule[i][3], `Demoscenes`]);
+              scheduleLog.push([sortedSchedule[i][2] + sortedSchedule[i][3], `Demoscene`]);
               break;
             case 'VOD':
               // push datetime and ''
@@ -488,7 +490,8 @@ module.exports = {
         // write to schedule.txt
         try {
           if(finalScheduleLog.length > 0) {
-            fs.writeFileSync('schedule.txt', ((tz !== '') ? tz : '') + finalScheduleLog.join(' |').slice(2));
+            let scheduleContent = ((tz !== '') ? tz : '') + finalScheduleLog.join(' |').slice(2);
+            fs.writeFileSync('schedule.txt', scheduleContent.replaceAll('||', konceptSpacerEmote));
           }
         } catch(err) {
           console.log(`\x1b[33m%s\x1b[0m`, `[LOGGER]`, `Could not write schedule to text file.`);
