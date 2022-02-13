@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 var konceptSpacerEmote = 'koncep2P';
+var multiLinedVariable = '48HR V-Weekender!';
 
 let nowIndex; // 'NOW'
 
@@ -437,9 +438,10 @@ module.exports = {
             case 'LIVE':
               // push datetime and remove 'LIVE:' from line1, then push formatted line1 to log array
               if(sortedSchedule[i][6] != undefined && sortedSchedule[i][6] !== '') {
-                // console.log(sortedSchedule[i][6]);
                 if(sortedSchedule[i][6].includes('LIVE:')) {
                   scheduleLog.push([sortedSchedule[i][2] + sortedSchedule[i][3], (sortedSchedule[i][6] != undefined && sortedSchedule[i][6] !== '') ? sortedSchedule[i][6].replace('LIVE:', '').trim() : `LIVE`]);
+                } else {
+                  scheduleLog.push([sortedSchedule[i][2] + sortedSchedule[i][3], (sortedSchedule[i][6] != undefined && sortedSchedule[i][6] !== '') ? sortedSchedule[i][6].trim() : `LIVE`]);
                 }
               }
               break;
@@ -456,42 +458,52 @@ module.exports = {
         let tz = '';
         for(let i = 0; i < scheduleLog.length; i++) {
           // turn from UTC to EST
-          const dEST = new Intl.DateTimeFormat(undefined, {
-            timeZone: 'America/New_York',
-            timeZoneName: 'short',
-            hourCycle: 'h24',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            weekday: 'short',
-            hour: '2-digit',
-            minute: '2-digit'
-          }).format(Date.parse(scheduleLog[i][0]));
-          switch(dEST.split(',')[2].trim().split(' ')[1]) {
-            case 'GMT+9':
-              tz = `(JST) `;
-              break;
-            default:
-              tz = `(${dEST.split(',')[2].trim().split(' ')[1]}) `;
-          }
-          let currDate = dEST.split(',')[1].trim();
-          let hour = dEST.split(',')[2].trim().split(' ')[0].trim().replace(':', '');
-          hour = (hour.substring(0,2) == '24') ? hour.replace(/^.{2}/g, '00') : hour;
-          // if scheduled job is on same day, only write date once to log
-          if(prevDate == currDate) {
-            finalScheduleLog.push(' ' + hour + ': ' + scheduleLog[i][1])
-          } else {
-            let dayName = dEST.split(',')[0].trim();
-            let monthDay = new Date(dEST.split(',')[1].trim()).toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
-            finalScheduleLog.push('| ' + dayName + ' ' + monthDay + ' - ' + hour + ': ' + scheduleLog[i][1])
-            prevDate = currDate;
+          if(Date.parse(scheduleLog[i][0]) !== NaN) {
+            const dEST = new Intl.DateTimeFormat(undefined, {
+              timeZone: 'America/New_York',
+              timeZoneName: 'short',
+              hourCycle: 'h24',
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              weekday: 'short',
+              hour: '2-digit',
+              minute: '2-digit'
+            }).format(Date.parse(scheduleLog[i][0]));
+            switch(dEST.split(',')[2].trim().split(' ')[1]) {
+              case 'GMT+9':
+                tz = `(JST) `;
+                break;
+              default:
+                tz = `(${dEST.split(',')[2].trim().split(' ')[1]}) `;
+            }
+            let currDate = dEST.split(',')[1].trim();
+            let hour = dEST.split(',')[2].trim().split(' ')[0].trim().replace(':', '');
+            hour = (hour.substring(0,2) == '24') ? hour.replace(/^.{2}/g, '00') : hour;
+            // if scheduled job is on same day, only write date once to log
+            if(prevDate == currDate) {
+              finalScheduleLog.push(' ' + hour + ': ' + scheduleLog[i][1])
+            } else {
+              let dayName = dEST.split(',')[0].trim();
+              let monthDay = new Date(dEST.split(',')[1].trim()).toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+              finalScheduleLog.push('| ' + dayName + ' ' + monthDay + ' - ' + hour + ': ' + scheduleLog[i][1])
+              prevDate = currDate;
+            }
           }
         }
         // write to schedule.txt
         try {
           if(finalScheduleLog.length > 0) {
-            let scheduleContent = ((tz !== '') ? tz : '') + finalScheduleLog.join(' |').slice(2);
+            let scheduleContent;
+            // special for 48HR V-Weekender!
+            if(finalScheduleLog[0].includes(`${multiLinedVariable} `)) {
+              scheduleContent = ((tz !== '') ? tz : '') + `${multiLinedVariable} ` + finalScheduleLog.join(' |').slice(2).replaceAll(`${multiLinedVariable} `, '');
+            } else {
+              scheduleContent = ((tz !== '') ? tz : '') + finalScheduleLog.join(' |').slice(2);
+            }
             fs.writeFileSync('schedule.txt', scheduleContent.replaceAll('||', konceptSpacerEmote));
+            // let scheduleContent = ((tz !== '') ? tz : '') + finalScheduleLog.join(' |').slice(2);
+            // fs.writeFileSync('schedule.txt', scheduleContent.replaceAll('||', konceptSpacerEmote));
           }
         } catch(err) {
           console.log(`\x1b[33m%s\x1b[0m`, `[LOGGER]`, `Could not write schedule to text file.`);
