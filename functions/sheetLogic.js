@@ -495,15 +495,12 @@ module.exports = {
         try {
           if(finalScheduleLog.length > 0) {
             let scheduleContent;
-            // special for 48HR V-Weekender!
             if(finalScheduleLog[0].includes(`${multiLinedVariable} `)) {
               scheduleContent = ((tz !== '') ? tz : '') + `${multiLinedVariable} ` + finalScheduleLog.join(' |').slice(2).replaceAll(`${multiLinedVariable} `, '');
             } else {
               scheduleContent = ((tz !== '') ? tz : '') + finalScheduleLog.join(' |').slice(2);
             }
             fs.writeFileSync('schedule.txt', scheduleContent.replaceAll('||', konceptSpacerEmote));
-            // let scheduleContent = ((tz !== '') ? tz : '') + finalScheduleLog.join(' |').slice(2);
-            // fs.writeFileSync('schedule.txt', scheduleContent.replaceAll('||', konceptSpacerEmote));
           }
         } catch(err) {
           console.log(`\x1b[33m%s\x1b[0m`, `[LOGGER]`, `Could not write schedule to text file.`);
