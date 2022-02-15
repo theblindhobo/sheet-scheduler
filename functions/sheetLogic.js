@@ -429,25 +429,25 @@ module.exports = {
           switch(sortedSchedule[i][4]) {
             case 'DEMO':
               // push datetime and 'Demoscene' to log array
-              scheduleLog.push([sortedSchedule[i][2] + sortedSchedule[i][3], `Demoscene`]);
+              scheduleLog.push([sortedSchedule[i][2] + ' ' + sortedSchedule[i][3], `Demoscene`]);
               break;
             case 'VOD':
               // push datetime and ''
-              scheduleLog.push([sortedSchedule[i][2] + sortedSchedule[i][3], (sortedSchedule[i][6] != undefined && sortedSchedule[i][6] !== '') ? sortedSchedule[i][6].trim() : `VOD`]);
+              scheduleLog.push([sortedSchedule[i][2] + ' ' + sortedSchedule[i][3], (sortedSchedule[i][6] != undefined && sortedSchedule[i][6] !== '') ? sortedSchedule[i][6].trim() : `VOD`]);
               break;
             case 'LIVE':
               // push datetime and remove 'LIVE:' from line1, then push formatted line1 to log array
               if(sortedSchedule[i][6] != undefined && sortedSchedule[i][6] !== '') {
                 if(sortedSchedule[i][6].includes('LIVE:')) {
-                  scheduleLog.push([sortedSchedule[i][2] + sortedSchedule[i][3], (sortedSchedule[i][6] != undefined && sortedSchedule[i][6] !== '') ? sortedSchedule[i][6].replace('LIVE:', '').trim() : `LIVE`]);
+                  scheduleLog.push([sortedSchedule[i][2] + ' ' + sortedSchedule[i][3], (sortedSchedule[i][6] != undefined && sortedSchedule[i][6] !== '') ? sortedSchedule[i][6].replace('LIVE:', '').trim() : `LIVE`]);
                 } else {
-                  scheduleLog.push([sortedSchedule[i][2] + sortedSchedule[i][3], (sortedSchedule[i][6] != undefined && sortedSchedule[i][6] !== '') ? sortedSchedule[i][6].trim() : `LIVE`]);
+                  scheduleLog.push([sortedSchedule[i][2] + ' ' + sortedSchedule[i][3], (sortedSchedule[i][6] != undefined && sortedSchedule[i][6] !== '') ? sortedSchedule[i][6].trim() : `LIVE`]);
                 }
               }
               break;
             default:
               if(sortedSchedule[i][6] != undefined && sortedSchedule[i][6] !== '') {
-                scheduleLog.push([sortedSchedule[i][2] + sortedSchedule[i][3], sortedSchedule[i][6]]);
+                scheduleLog.push([sortedSchedule[i][2] + ' ' + sortedSchedule[i][3], sortedSchedule[i][6]]);
               }
           }
         }
@@ -458,7 +458,7 @@ module.exports = {
         let tz = '';
         for(let i = 0; i < scheduleLog.length; i++) {
           // turn from UTC to EST
-          if(Date.parse(scheduleLog[i][0]) !== NaN) {
+          if(!isNaN(Date.parse(scheduleLog[i][0]))) {
             const dEST = new Intl.DateTimeFormat(undefined, {
               timeZone: 'America/New_York',
               timeZoneName: 'short',
