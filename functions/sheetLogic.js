@@ -333,12 +333,20 @@ module.exports = {
                       }
                     }
 
+                    // write to title file
                     try {
-                      // write to title file
                       fs.writeFileSync('title1.txt', `${rowObj.line1}`);
                       fs.writeFileSync('title2.txt', `${rowObj.line2}`);
                     } catch(err) {
                       console.log(`\x1b[33m%s\x1b[0m`, `[TITLES]`, `Could not write to title text file.`);
+                    }
+
+                    try {
+                      setTimeout(() => {
+                        require('./webhook.js').webhook(rowObj);
+                      }, 1 * 60 * 1000); // 1 minute timeout to make sure twitch preview is of streamer
+                    } catch(err) {
+                      console.log(`\x1b[33m%s\x1b[0m`, `[WEBHOOK]`, `Could not send webhook to discord.`);
                     }
 
                     // write to log file

@@ -6,3 +6,4 @@ title2.txt
 schedule.txt
 token.json
 .env
+functions/webhook-anth.js
