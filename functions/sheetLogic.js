@@ -3,211 +3,59 @@ const schedule = require('node-schedule');
 const dotenv = require('dotenv');
 dotenv.config();
 
-var konceptSpacerEmote = 'koncep2P';
-var multiLinedVariable = '48HR V-Weekender!';
+var konceptSpacerEmote = 'koncep2SWING';
+var multiLinedVariable = ' ';
+var defaultTimezone = 'UTC';
+
+const {
+  toTimestamp, clearDisplayDone,
+  sendDisplay, writeStatusDone,
+  writeStatusScheduled, cleanupStatus,
+  sendTitle, writeNowDatetime } = require('./functions.js');
+
 
 let nowIndex; // 'NOW'
-
 var actionArray = ['DEMO', 'LIVE', 'VOD'];
-
-function toTimestamp(strDate) {
-  var datum = Date.parse(strDate);
-  return datum/1000;
-}
-function clearDisplayDone(sheets, index) {
-  let status = ''
-  let values = [
-    [
-      status
-    ],
-  ];
-  let data = [
-    {
-      range: `MASTER SCHEDULE!B${index}`,
-      values,
-    },
-    {
-      range: `MASTER SCHEDULE!F${index}`,
-      values,
-    },
-    {
-      range: `MASTER SCHEDULE!G${index}`,
-      values,
-    }];
-  const resource = {
-    data,
-    valueInputOption: "USER_ENTERED"
-  };
-  sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId: process.env.SPREADSHEET_ID,
-    resource
-  }, (err, result) => {
-    if(err) {
-      console.log(err);
-    } else {
-      console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `[SCHEDULER]`, `\t DISPLAYED titles immediately and CLEARED cells at `, `B${index}, F${index}, G${index}`);
-    }
-  });
-}
-function sendDisplay(socket, displayObj) {
-  setTimeout(() => {
-    socket.send(JSON.stringify(displayObj));
-  }, 2000);
-}
-function writeStatusDone(sheets, index) {
-  setTimeout(() => {
-    let range = `MASTER SCHEDULE!A${index}`;
-    let status = 'DONE'
-    let values = [
-      [
-        status
-      ],
-    ];
-    const resource = {
-      values,
-    };
-    sheets.spreadsheets.values.update({
-      spreadsheetId: process.env.SPREADSHEET_ID,
-      range: range,
-      valueInputOption: "USER_ENTERED",
-      resource
-    }, (err, result) => {
-      if(err) {
-        console.log(err);
-      } else {
-        console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `[SCHEDULER]`, `\t STATUS updated at cell `, `A${index}`);
-      }
-    });
-  }, 1000);
-}
-function writeStatusScheduled(sheets, index) {
-  // check if STATUS says scheduled already, if not.. write it
-  sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.SPREADSHEET_ID,
-    range: `MASTER SCHEDULE!A${index}`,
-  }, (err, res) => {
-    if(err) return console.log('[WRITE STATUS]', index, ' The API returned an error: ' + err);
-    if(res.data.values == undefined || res.data.values[0][0] !== 'SCHEDULED') {
-      let range = `MASTER SCHEDULE!A${index}`;
-      let status = 'SCHEDULED'
-      let values = [
-        [
-          status
-        ],
-      ];
-      const resource = {
-        values,
-      };
-      sheets.spreadsheets.values.update({
-        spreadsheetId: process.env.SPREADSHEET_ID,
-        range: range,
-        valueInputOption: "USER_ENTERED",
-        resource
-      }, (err, result) => {
-        if(err) {
-          console.log(err);
-        } else {
-          // console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `[SCHEDULER]`, `\t STATUS updated at cell `, `A${index}`);
-        }
-      });
-    }
-  });
-}
-function cleanupStatus(sheets, index) {
-  sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.SPREADSHEET_ID,
-    range: `MASTER SCHEDULE!A${index}`,
-  }, (err, res) => {
-    if(err) return console.log('[CLEANUP STATUS] The API returned an error: ' + err);
-
-    let range = `MASTER SCHEDULE!A${index}`;
-    let status = ''
-    let values = [
-      [
-        status
-      ],
-    ];
-    const resource = {
-      values,
-    };
-    sheets.spreadsheets.values.update({
-      spreadsheetId: process.env.SPREADSHEET_ID,
-      range: range,
-      valueInputOption: "USER_ENTERED",
-      resource
-    }, (err, result) => {
-      if(err) {
-        console.log(err);
-      } else {
-        // console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `[SCHEDULER]`, `\t STATUS updated at cell `, `A${index}`);
-      }
-    });
-
-  });
-}
-function sendTitle(socket, titleObj) {
-  socket.send(JSON.stringify(titleObj));
-}
-function writeNowDatetime(sheets, rowsLength, index, datetime, date) {
-  let range = (index != undefined) ? `MASTER SCHEDULE!B${index}` : `MASTER SCHEDULE!B${rowsLength + 3}`;
-  let values = [
-    [
-      datetime
-    ],
-  ];
-  const resource = {
-    values,
-  };
-  // change cell on spreadsheet from NOW to current datetime
-  sheets.spreadsheets.values.update({
-    spreadsheetId: process.env.SPREADSHEET_ID,
-    range: range,
-    valueInputOption: "USER_ENTERED",
-    resource
-  }, (err, result) => {
-    if(err) {
-      console.log(err);
-    } else {
-      console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `[SCHEDULER]`, `\t DATETIME updated at cell `, `B${index}`);
-    }
-  });
-}
 
 module.exports = {
   sheetLogic: (google, auth, client) => {
     let jobs = []; // only used to compare lists
     let currSchedule = []; // used to find next 5 scheduled jobs and log to schedule.txt
 
-
     const sheets = google.sheets({version: 'v4', auth});
     sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'MASTER SCHEDULE!A2:H',
+      range: `${process.env.SHEET_NAME}!A2:H`,
     }, (err, res) => {
       if (err) return console.log('[READ] The API returned an error: ' + err);
       const rows = res.data.values;
       if (rows.length) {
 
-        // Adds index # to each row array
-        for(let i = 0; i < rows.length; i++) {
-          rows[i].unshift(i + 2); // sets index at beginning of each row array
-        }
-
+        let rowIndex = 0;
         // maps through each row individually
-        rows.map((row) => {
-          let rowObj = { index: row[0] };
+        rows.map(async (row) => {
+          row.unshift(rowIndex + 2); // sets index at beginning of each row array
+          rowIndex++;
 
+          var column = {
+            index: (row[0]) ? row[0] : '',
+            status: (row[1]) ? row[1] : '',
+            datetime: (row[2]) ? row[2] : '',
+            timezone: (row[3] == defaultTimezone) ? row[3] : defaultTimezone,
+            action: (row[4]) ? row[4] : '',
+            source: (row[5]) ? row[5] : '',
+            line1: (row[6]) ? row[6] : '',
+            line2: (row[7]) ? row[7] : '',
+          }
 
-          if(row[2] == 'DISPLAY' && row[0] == 2) {
+          if(column.datetime == 'DISPLAY' && column.index == 2) {
             // send Quick Display titles without logging to file
-
-            rowObj.datetime = row[2];
-            rowObj.line1 = row[6] ? row[6] : ' ';
-            rowObj.line2 = row[7] ? row[7] : ' ';
+            column.line1 = (column.line1 !== '') ? column.line1 : ' ';
+            column.line2 = (column.line2 !== '') ? column.line2 : ' ';
 
             try {
-              fs.writeFileSync('title1.txt', rowObj.line1);
-              fs.writeFileSync('title2.txt', rowObj.line2);
+              fs.writeFileSync('title1.txt', column.line1);
+              fs.writeFileSync('title2.txt', column.line2);
             } catch(err) {
               console.log(`\x1b[33m%s\x1b[0m`, `[TITLES]`, `Could not write to title text file.`);
             }
@@ -223,8 +71,8 @@ module.exports = {
                     "action": 'DISPLAY',
                     "source": '',
                     "name": 'Quick Display',
-                    "line1": rowObj.line1,
-                    "line2": rowObj.line2
+                    "line1": column.line1,
+                    "line2": column.line2
                   }
               };
               if(socket.readyState == 1) {
@@ -232,26 +80,21 @@ module.exports = {
               } else {
                 console.log(`\x1b[35m%s\x1b[0m`, `\n[WEBSOCKET]`, `Couldn't send Quick Display to websocket. Socket is closed, closing, or reconnecting. Try again later.`);
               }
-              clearDisplayDone(sheets, rowObj.index);
+              clearDisplayDone(sheets, column.index);
           }
-        } else if((row[0] >= 5 && row.length >= 4 && !isNaN(new Date(row[2])) && actionArray.includes(row[4])) || (row[0] >= 5 && row.length >= 4 && row[2] == 'NOW' && actionArray.includes(row[4]))) {
+        } else if((column.index >= 5 && !isNaN(new Date(column.datetime)) && actionArray.includes(column.action)) || (column.index >= 5 && column.datetime == 'NOW' && actionArray.includes(column.action))) {
             // Checks if action LIVE, DEMO, or VOD
             // Check DATETIME is a date or 'NOW'
 
             // sets nowIndex
-            if(row[2] == 'NOW') {
-              nowIndex = row[0];
+            if(column.datetime == 'NOW') {
+              nowIndex = column.index;
             }
 
             let now = Date.parse(new Date); // timestamp of the time right now
 
-            // Creates row Object
-            rowObj.status = row[1];
-            rowObj.datetime = row[2];
-            rowObj.timezone = (row[3] == 'UTC') ? row[3] : 'UTC';
-            rowObj.action = row[4];
-            rowObj.source = (row[5] !== undefined) ? ((row[4] == 'DEMO') ? ' ' : row[5]) : ' ';
-            switch (rowObj.action) {
+            column.source = (column.source !== undefined) ? ((column.action == 'DEMO') ? ' ' : column.source) : ' ';
+            switch (column.action) {
               case 'DEMO':
                 const d = new Date(Date.now()).toLocaleDateString('en-US',
                   {
@@ -262,17 +105,17 @@ module.exports = {
                   }
                 ).replace(',','').split(' ');
                 let dT = `NOW: Demoscene | ${d[1]} ${d[0]} ${d[2]}`;
-                rowObj.line1 = (row[6] !== undefined) ? ((row[6] !== '') ? row[6] : dT) : dT;
-                rowObj.line2 = (row[7] !== undefined) ? ((row[7] !== '') ? row[7] : ' ') : ' ';
+                column.line1 = (column.line1 !== '') ? column.line1 : dT;
+                column.line2 = (column.line2 !== '') ? column.line2 : ' ';
                 break;
               default:
-                rowObj.line1 = row[6] ? row[6] : ' ';
-                rowObj.line2 = row[7] ? row[7] : ' ';
+                column.line1 = (column.line1 !== '') ? column.line1 : ' ';
+                column.line2 = (column.line2 !== '') ? column.line2 : ' ';
             }
 
-            if(new Date(rowObj.datetime) instanceof Date || rowObj.datetime == 'NOW') {
-              let timestamp = (rowObj.datetime == 'NOW') ? (now + 1000)/1000 : toTimestamp(`${rowObj.datetime} ${rowObj.timezone}`);
-              let date = (rowObj.datetime == 'NOW') ? new Date(timestamp * 1000) : new Date(timestamp * 1000);
+            if(new Date(column.datetime) instanceof Date || column.datetime == 'NOW') {
+              let timestamp = (column.datetime == 'NOW') ? (now + 1000)/1000 : toTimestamp(`${column.datetime} ${column.timezone}`);
+              let date = (column.datetime == 'NOW') ? new Date(timestamp * 1000) : new Date(timestamp * 1000);
 
               if(timestamp * 1000 < now) {
                 // don't schedule job, time has passed already
@@ -283,7 +126,7 @@ module.exports = {
                 }
               } else {
                 // check if LIVE has a URI && if VOD has a NAME
-                if((rowObj.action === 'LIVE' && rowObj.source !== '') || (rowObj.action === 'VOD' && rowObj.source !== '') || (rowObj.action === 'DEMO')) {
+                if((column.action === 'LIVE' && column.source !== '') || (column.action === 'VOD' && column.source !== '') || (column.action === 'DEMO')) {
 
                   jobs.push(timestamp);
 
@@ -304,12 +147,12 @@ module.exports = {
                   // schedule job
                   var j = schedule.scheduleJob(`${timestamp}`, date, function() {
 
-                    if(rowObj.datetime == 'NOW') {
-                      rowObj.datetime = (date.getUTCMonth()+1) + '/' + date.getUTCDate() + '/' + date.getUTCFullYear() + ' ' + date.getUTCHours() + ':' + date.getUTCMinutes() + ':' + date.getUTCSeconds();
-                      writeNowDatetime(sheets, rows.length, nowIndex, rowObj.datetime, date);
+                    if(column.datetime == 'NOW') {
+                      column.datetime = (date.getUTCMonth()+1) + '/' + date.getUTCDate() + '/' + date.getUTCFullYear() + ' ' + date.getUTCHours() + ':' + date.getUTCMinutes() + ':' + date.getUTCSeconds();
+                      writeNowDatetime(sheets, rows.length, nowIndex, column.datetime, date);
                     }
 
-                    if(rowObj.action == 'LIVE' || rowObj.action == 'VOD') {
+                    if(column.action == 'LIVE' || column.action == 'VOD') {
                       let socket = client ? client : 'closed';
                       if(socket == 'closed') {
                         console.log(`\x1b[35m%s\x1b[0m`, `\n[WEBSOCKET]`, `Couldn't send titles to websocket. Socket is closed.`);
@@ -317,11 +160,11 @@ module.exports = {
                         titleObj = {
                             "event": "titles",
                             "data": {
-                              "action": (rowObj.action !== undefined) ? rowObj.action : '',
-                              "source": (rowObj.source !== undefined) ? rowObj.source : '',
-                              "name": (rowObj.action == 'DISPLAY') ? 'Quick Display' : '',
-                              "line1": rowObj.line1,
-                              "line2": rowObj.line2
+                              "action": column.action,
+                              "source": column.source,
+                              "name": (column.action == 'DISPLAY') ? 'Quick Display' : '',
+                              "line1": column.line1,
+                              "line2": column.line2
                             }
                         };
 
@@ -335,15 +178,15 @@ module.exports = {
 
                     // write to title file
                     try {
-                      fs.writeFileSync('title1.txt', `${rowObj.line1}`);
-                      fs.writeFileSync('title2.txt', `${rowObj.line2}`);
+                      fs.writeFileSync('title1.txt', `${column.line1}`);
+                      fs.writeFileSync('title2.txt', `${column.line2}`);
                     } catch(err) {
                       console.log(`\x1b[33m%s\x1b[0m`, `[TITLES]`, `Could not write to title text file.`);
                     }
 
                     try {
                       setTimeout(() => {
-                        require('./webhook.js').webhook(rowObj);
+                        require('./webhook.js').webhook(column);
                       }, 1 * 60 * 1000); // 1 minute timeout to make sure twitch preview is of streamer
                     } catch(err) {
                       console.log(`\x1b[33m%s\x1b[0m`, `[WEBHOOK]`, `Could not send webhook to discord.`);
@@ -351,15 +194,15 @@ module.exports = {
 
                     // write to log file
                     let content;
-                    switch (rowObj.action) {
+                    switch (column.action) {
                       case 'LIVE':
-                        content = `${rowObj.source}`;
+                        content = `${column.source}`;
                         break;
                       case 'VOD':
-                        content = `${rowObj.action}:${rowObj.source}`;
+                        content = `${column.action}:${column.source}`;
                         break;
                       case 'DEMO':
-                        content = `${rowObj.action}`;
+                        content = `${column.action}`;
                         break;
                       default:
                         console.log(`\x1b[31m%s\x1b[0m`, `[SCHEDULER]`, `There's an error in the *content switch*.`);
@@ -369,43 +212,43 @@ module.exports = {
                         console.log(`\x1b[31m%s\x1b[0m`, `[SCHEDULER]`, err);
                         return
                       }
-                      console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `\n[SCHEDULER]`, `\t Successfully logged to file as: ${content}  `, `  ${rowObj.datetime} ${rowObj.timezone}\n`);
+                      console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `\n[SCHEDULER]`, `\t Successfully logged to file as: ${content}  `, `  ${column.datetime} ${column.timezone}\n`);
                     });
-                    writeStatusDone(sheets, rowObj.index);
+                    writeStatusDone(sheets, column.index);
                   });
 
-                  if(rowObj.status !== 'SCHEDULED') {
-                    writeStatusScheduled(sheets, rowObj.index);
+                  if(column.status !== 'SCHEDULED') {
+                    writeStatusScheduled(sheets, column.index);
                   }
 
                 }
               }
             }
           }
-          if(row[1] == 'SCHEDULED') {
-            if(row[2] != undefined || row[2] !== '') {
-              if(!jobs.includes(toTimestamp(`${row[2]} UTC`))) {
+          if(column.status == 'SCHEDULED') {
+            if(column.datetime != undefined || column.datetime !== '') {
+              if(!jobs.includes(toTimestamp(`${column.datetime} ${defaultTimezone}`))) {
                 // how to check if theres multiple exact times
-                cleanupStatus(sheets, row[0]);
+                cleanupStatus(sheets, column.index);
               } else {
-                if(Date.parse(row[2]) !== NaN) {
-                  currSchedule.push(row);
+                if(!isNaN(Date.parse(column.datetime))) {
+                  currSchedule.push(Object.values(column));
                 }
               }
             } else {
-              cleanupStatus(sheets, row[0]);
+              cleanupStatus(sheets, column.index);
             }
-          } else if(row[1] == 'DONE') {
-            if(row[2] != undefined || row[2] !== '') { // datetime not blank '' or undefined
-              if(new Date(row[2]) instanceof Date) { // datetime is a valid date
-                if((toTimestamp(`${row[2]} UTC`)) * 1000 < Date.parse(new Date)) { // datetime is in the past
+          } else if(column.status == 'DONE') {
+            if(column.datetime != undefined || column.datetime !== '') { // datetime not blank '' or undefined
+              if(new Date(column.datetime) instanceof Date) { // datetime is a valid date
+                if((toTimestamp(`${column.datetime} ${defaultTimezone}`)) * 1000 < Date.parse(new Date)) { // datetime is in the past
                   // date in past
                 } else {
-                  cleanupStatus(sheets, row[0]); // date not in past
+                  cleanupStatus(sheets, column.index); // date not in past
                 }
               }
             } else {
-              cleanupStatus(sheets, row[0]);
+              cleanupStatus(sheets, column.index);
             }
           }
         });
@@ -434,6 +277,7 @@ module.exports = {
       let scheduleLog = [];
       for(let i = 0; i < sortedSchedule.length; i++) {
         if(sortedSchedule[i][4] != undefined && sortedSchedule[i][4] !== '') {
+          sortedSchedule[i][3] = (sortedSchedule[i][3] == defaultTimezone) ? sortedSchedule[i][3] : defaultTimezone;
           switch(sortedSchedule[i][4]) {
             case 'DEMO':
               // push datetime and 'Demoscene' to log array
@@ -465,7 +309,7 @@ module.exports = {
         let prevDate;
         let tz = '';
         for(let i = 0; i < scheduleLog.length; i++) {
-          // turn from UTC to EST
+          // turn from defaultTimezone to EST
           if(!isNaN(Date.parse(scheduleLog[i][0]))) {
             const dEST = new Intl.DateTimeFormat(undefined, {
               timeZone: 'America/New_York',
