@@ -15,36 +15,40 @@ var randResolutions = [
 let counter = Date.now();
 
 async function cachePreview(twitchPreviewURL) {
+
   try {
-    // save preview to cache folder
-    await fetch(twitchPreviewURL)
-      .then(res => {
-        res.body.pipe(fs.createWriteStream(`./functions/.cache/twitchPreview.jpg`))
-      })
-      .catch(err => console.log(err));
-    // convert img to base64
-    var form = new FormData();
-    let imgBase64;
-    var file = await imageToBase64(`./functions/.cache/twitchPreview.jpg`)
-      .then(async response => {
-        imgBase64 = await response;
-      })
-      .catch(err => console.log(err));
-    await form.set('image', imgBase64);
-    // upload base64 img to imgbb
-    let res;
-    await fetch(`https://api.imgbb.com/1/upload?key=${process.env.IMGBB_API_KEY}`, {
-      method: 'POST',
-      body: form
-    })
-      .then(res => res.json())
-      .then(async data => {
-        if(data.status == 200) {
-          res = await data.data.url;
-        }
-      })
-      .catch(err => console.log(err));
-    return res;
+    // save preview to /.cache/ folder
+    let finalRes = await fetch(twitchPreviewURL)
+        .then(async res => {
+          let stream = await fs.createWriteStream(`./functions/.cache/twitchPreview.jpg`)
+          await res.body.pipe(stream)
+          await stream.on('finish', () => {});
+
+          return new Promise((resolve, reject) => {
+              setTimeout(async () => {
+                // convert img to base64
+                var form = new FormData();
+                let imgBase64;
+                var file = await imageToBase64(`./functions/.cache/twitchPreview.jpg`)
+                  .then(res => { imgBase64 = res; }).catch(err => console.log(err));
+                await form.set('image', imgBase64);
+                // upload base64 img to imgbb
+                let results;
+                var postFile = await fetch(`https://api.imgbb.com/1/upload?key=${process.env.IMGBB_API_KEY}`, {
+                  method: 'POST',
+                  body: form
+                }).then(res => res.json())
+                  .then(data => {
+                    if(data.status == 200) {
+                      results = data.data.url;
+                    }
+                }).catch(err => console.log(err));
+                resolve(results);
+              }, 1000);
+          })
+        })
+        .catch(err => console.log(err));
+    return finalRes;
   } catch(err) {
     console.log(`\x1b[33m%s\x1b[0m`, `[WEBHOOK]`, `\tWas not able to cache and upload preview, resorting to client-based preview process.`);
     return twitchPreviewURL;
@@ -76,7 +80,9 @@ module.exports = {
 
         var channelUser = 'koncept_k';
         var streamPreview = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channelUser}-${randResolutions[Math.floor(Math.random()*randResolutions.length)]}.jpg?count=${counter}`;
+
         var resPreview = await cachePreview(streamPreview);
+
         counter++;
 
         // setup embed
