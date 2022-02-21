@@ -1,4 +1,5 @@
 const fs = require('fs');
+const logger = require('./logger/logger.js');
 const imageToBase64 = require('image-to-base64');
 var { FormData, File } = require('formdata-node');
 const dotenv = require('dotenv');
@@ -30,7 +31,10 @@ async function cachePreview(twitchPreviewURL) {
                 var form = new FormData();
                 let imgBase64;
                 var file = await imageToBase64(`./functions/.cache/twitchPreview.jpg`)
-                  .then(res => { imgBase64 = res; }).catch(err => console.log(err));
+                  .then(res => { imgBase64 = res; }).catch(err => {
+                    logger.log(`[WEBHOOK]\tError converting file to base64: ${err}`);
+                    console.log(`\x1b[33m%s\x1b[0m`, `[WEBHOOK]`, `\tError converting file to base64: ${err}`);
+                  });
                 await form.set('image', imgBase64);
                 // upload base64 img to imgbb
                 let results;
@@ -42,14 +46,21 @@ async function cachePreview(twitchPreviewURL) {
                     if(data.status == 200) {
                       results = data.data.url;
                     }
-                }).catch(err => console.log(err));
+                }).catch(err => {
+                  logger.log(`[WEBHOOK]\tError posting file: ${err}`);
+                  console.log(`\x1b[33m%s\x1b[0m`, `[WEBHOOK]`, `\tError posting file: ${err}`);
+                });
                 resolve(results);
               }, 1000);
           })
         })
-        .catch(err => console.log(err));
+        .catch(err => {
+          logger.log(`[WEBHOOK]\tError fetching file: ${err}`);
+          console.log(`\x1b[33m%s\x1b[0m`, `[WEBHOOK]`, `\tError fetching file: ${err}`);
+        });
     return finalRes;
   } catch(err) {
+    logger.log(`[WEBHOOK]\tWas not able to cache and upload preview, resorting to client-based preview process.`)
     console.log(`\x1b[33m%s\x1b[0m`, `[WEBHOOK]`, `\tWas not able to cache and upload preview, resorting to client-based preview process.`);
     return twitchPreviewURL;
   }
@@ -114,12 +125,16 @@ module.exports = {
 
         // post webhook
         try {
-          await fetch(process.env.TEST_WEBHOOK_URL, {
+          await fetch(process.env.LIVE_WEBHOOK_URL, {
             method: 'POST',
             body: JSON.stringify(params),
             headers: { 'Content-Type': 'application/json' }
-          }).catch(err => console.log(err));
+          }).catch(err => {
+            logger.log(`[WEBHOOK]\tError posting webhook in fetch: ${err}`);
+            console.log(`\x1b[33m%s\x1b[0m`, `[WEBHOOK]`, `\tError posting webhook in fetch: ${err}`);
+          });
         } catch(err) {
+          logger.log(`[WEBHOOK]\tWas not able to post webhook: ${err}`);
           console.log(`\x1b[33m%s\x1b[0m`, `[WEBHOOK]`, `\tWas not able to post webhook.`);
         }
 

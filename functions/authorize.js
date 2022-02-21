@@ -1,4 +1,5 @@
 const fs = require('fs');
+const logger = require('./logger/logger.js');
 const { google } = require('googleapis');
 const readline = require('readline');
 
@@ -11,7 +12,8 @@ function getNewToken(oAuth2Client, callback) {
     access_type: 'offline',
     scope: SCOPES,
   });
-  console.log('Authorize this app by visiting this url:', authUrl);
+  logger.log(`[AUTHORIZE]\tAuthorize this app by visiting this url: ${authUrl}`);
+  console.log(`[AUTHORIZE]\tAuthorize this app by visiting this url: ${authUrl}`);
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -23,8 +25,12 @@ function getNewToken(oAuth2Client, callback) {
       oAuth2Client.setCredentials(token);
       // Store the token to disk for later program executions
       fs.writeFile(TOKEN_PATH, JSON.stringify(token), (err) => {
-        if (err) return console.error(err);
-        console.log('Token stored to', TOKEN_PATH);
+        if (err) {
+          logger.log(`[AUTHORIZE]\tError writing token to file: ${err}`);
+          return console.error(`[AUTHORIZE]\tError writing token to file: ${err}`);
+        }
+        logger.log(`[AUTHORIZE]\tToken stored to: ${TOKEN_PATH}`);
+        console.log(`[AUTHORIZE]\tToken stored to: ${TOKEN_PATH}`);
       });
       callback(oAuth2Client);
     });

@@ -1,3 +1,4 @@
+const logger = require('./logger/logger.js');
 const dotenv = require('dotenv');
 dotenv.config();
 var sheetName = process.env.SHEET_NAME
@@ -42,8 +43,10 @@ module.exports = {
       resource
     }, (err, result) => {
       if(err) {
-        console.log(err);
+        logger.log(`[CLEAR DISPLAY] Error: ${err}`);
+        console.log(`[CLEAR DISPLAY] Error: `, err);
       } else {
+        logger.log(`[SCHEDULER]\tDISPLAYED titles immediately and CLEARED cells at ${sheetColumn.datetime}${index}, ${sheetColumn.line1}${index}, ${sheetColumn.line2}${index}`);
         console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `[SCHEDULER]`, `\t DISPLAYED titles immediately and CLEARED cells at `, `${sheetColumn.datetime}${index}, ${sheetColumn.line1}${index}, ${sheetColumn.line2}${index}`);
       }
     });
@@ -72,8 +75,10 @@ module.exports = {
         resource
       }, (err, result) => {
         if(err) {
-          console.log(err);
+          logger.log(`[WRITE STATUS DONE] Error: ${err}`);
+          console.log(`[WRITE STATUS DONE] Error: `, err);
         } else {
+          logger.log(`[SCHEDULER]\tSTATUS updated at cell ${sheetColumn.status}${index}`);
           console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `[SCHEDULER]`, `\t STATUS updated at cell `, `${sheetColumn.status}${index}`);
         }
       });
@@ -85,7 +90,10 @@ module.exports = {
       spreadsheetId: process.env.SPREADSHEET_ID,
       range: `${sheetName}!${sheetColumn.status}${index}`,
     }, (err, res) => {
-      if(err) return console.log('[WRITE STATUS]', index, ' The API returned an error: ' + err);
+      if(err) {
+        logger.log(`[WRITE STATUS] INDEX: ${index}\tThe API returned an error: ${err}`);
+        return console.log('[WRITE STATUS]', index, ' The API returned an error: ' + err);
+      }
       if(res.data.values == undefined || res.data.values[0][0] !== 'SCHEDULED') {
         let range = `${sheetName}!${sheetColumn.status}${index}`;
         let status = 'SCHEDULED'
@@ -104,8 +112,10 @@ module.exports = {
           resource
         }, (err, result) => {
           if(err) {
-            console.log(err);
+            logger.log(`[WRITE STATUS SCHEDULED] Error: ${err}`);
+            console.log(`[WRITE STATUS SCHEDULED] Error: `, err);
           } else {
+            // logger.log(`[SCHEDULER]\tSTATUS updated at cell A${index}`);
             // console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `[SCHEDULER]`, `\t STATUS updated at cell `, `A${index}`);
           }
         });
@@ -117,7 +127,10 @@ module.exports = {
       spreadsheetId: process.env.SPREADSHEET_ID,
       range: `${sheetName}!${sheetColumn.status}${index}`,
     }, (err, res) => {
-      if(err) return console.log('[CLEANUP STATUS] The API returned an error: ' + err);
+      if(err) {
+        logger.log(`[CLEANUP STATUS] The API returned an error: ${err}`);
+        return console.log(`[CLEANUP STATUS] The API returned an error: `, err);
+      }
 
       let range = `${sheetName}!${sheetColumn.status}${index}`;
       let status = ''
@@ -136,8 +149,10 @@ module.exports = {
         resource
       }, (err, result) => {
         if(err) {
-          console.log(err);
+          logger.log(`[CLEANUP STATUS] Error: ${err}`);
+          console.log(`[CLEANUP STATUS] Error: `, err);
         } else {
+          // logger.log(`[SCHEDULER]\tSTATUS updated at cell A${index}`);
           // console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `[SCHEDULER]`, `\t STATUS updated at cell `, `A${index}`);
         }
       });
@@ -165,8 +180,10 @@ module.exports = {
       resource
     }, (err, result) => {
       if(err) {
-        console.log(err);
+        logger.log(`[WRITE NOW DATETIME] Error: ${err}`);
+        console.log(`[WRITE NOW DATETIME] Error: `, err);
       } else {
+        logger.log(`[SCHEDULER]\tDATETIME updated at cell ${sheetColumn.datetime}${index}`);
         console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `[SCHEDULER]`, `\t DATETIME updated at cell `, `${sheetColumn.datetime}${index}`);
       }
     });

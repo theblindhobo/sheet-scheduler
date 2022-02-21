@@ -1,4 +1,5 @@
 const fs = require('fs');
+const logger = require('./logger/logger.js');
 const schedule = require('node-schedule');
 const dotenv = require('dotenv');
 dotenv.config();
@@ -13,6 +14,7 @@ const {
   writeStatusScheduled, cleanupStatus,
   sendTitle, writeNowDatetime } = require('./functions.js');
 
+let prevScheduledJobCount;
 
 let nowIndex; // 'NOW'
 var actionArray = ['DEMO', 'LIVE', 'VOD'];
@@ -27,7 +29,10 @@ module.exports = {
       spreadsheetId: process.env.SPREADSHEET_ID,
       range: `${process.env.SHEET_NAME}!A2:H`,
     }, (err, res) => {
-      if (err) return console.log('[READ] The API returned an error: ' + err);
+      if (err) {
+        logger.log(`[READ] The API returned an error: ${err}`);
+        return console.log('[READ] The API returned an error: ' + err);
+      }
       const rows = res.data.values;
       if (rows.length) {
 
@@ -57,12 +62,14 @@ module.exports = {
               fs.writeFileSync('title1.txt', column.line1);
               fs.writeFileSync('title2.txt', column.line2);
             } catch(err) {
+              logger.log(`[TITLES] Could not write to title text file.`);
               console.log(`\x1b[33m%s\x1b[0m`, `[TITLES]`, `Could not write to title text file.`);
             }
 
             let displayObj;
             let socket = client ? client : 'closed';
             if(socket == 'closed') {
+              logger.log(`[WEBSOCKET] Couldn't send titles to websocket. Socket is closed.`);
               console.log(`\x1b[35m%s\x1b[0m`, `\n[WEBSOCKET]`, `Couldn't send titles to websocket. Socket is closed.`);
             } else {
               displayObj = {
@@ -78,6 +85,7 @@ module.exports = {
               if(socket.readyState == 1) {
                 sendDisplay(socket, displayObj);
               } else {
+                logger.log(`[WEBSOCKET] Couldn't send Quick Display to websocket. Socket is closed, closing, or reconnecting. Try again later.`);
                 console.log(`\x1b[35m%s\x1b[0m`, `\n[WEBSOCKET]`, `Couldn't send Quick Display to websocket. Socket is closed, closing, or reconnecting. Try again later.`);
               }
               clearDisplayDone(sheets, column.index);
@@ -155,6 +163,7 @@ module.exports = {
                     if(column.action == 'LIVE' || column.action == 'VOD') {
                       let socket = client ? client : 'closed';
                       if(socket == 'closed') {
+                        logger.log(`[WEBSOCKET] Couldn't send titles to websocket. Socket is closed.`);
                         console.log(`\x1b[35m%s\x1b[0m`, `\n[WEBSOCKET]`, `Couldn't send titles to websocket. Socket is closed.`);
                       } else {
                         titleObj = {
@@ -171,6 +180,7 @@ module.exports = {
                         if(socket.readyState == 1) {
                           sendTitle(socket, titleObj);
                         } else {
+                          logger.log(`[WEBSOCKET] Couldn't send titles to websocket. Socket is closed, closing, or reconnecting.`);
                           console.log(`\x1b[35m%s\x1b[0m`, `\n[WEBSOCKET]`, `Couldn't send titles to websocket. Socket is closed, closing, or reconnecting.`);
                         }
                       }
@@ -181,6 +191,7 @@ module.exports = {
                       fs.writeFileSync('title1.txt', `${column.line1}`);
                       fs.writeFileSync('title2.txt', `${column.line2}`);
                     } catch(err) {
+                      logger.log(`[TITLES] Could not write to title text file.`);
                       console.log(`\x1b[33m%s\x1b[0m`, `[TITLES]`, `Could not write to title text file.`);
                     }
 
@@ -189,6 +200,7 @@ module.exports = {
                         require('./webhook.js').webhook(column);
                       }, 1 * 60 * 1000); // 1 minute timeout to make sure twitch preview is of streamer
                     } catch(err) {
+                      logger.log(`[WEBHOOK] Could not send webhook to discord.`);
                       console.log(`\x1b[33m%s\x1b[0m`, `[WEBHOOK]`, `Could not send webhook to discord.`);
                     }
 
@@ -205,13 +217,16 @@ module.exports = {
                         content = `${column.action}`;
                         break;
                       default:
+                        logger.log(`[SCHEDULER] There's an error in the *content switch*.`);
                         console.log(`\x1b[31m%s\x1b[0m`, `[SCHEDULER]`, `There's an error in the *content switch*.`);
                     }
                     fs.writeFile('log.txt', content, err => {
                       if(err) {
+                        logger.log(`[SCHEDULER] Error in writing to log.txt for DEMO, LIVE, VOD: ${err}`);
                         console.log(`\x1b[31m%s\x1b[0m`, `[SCHEDULER]`, err);
                         return
                       }
+                      logger.log(`[SCHEDULER]\tSuccessfully logged to file as: ${content} - ${column.datetime} ${column.timezone}`);
                       console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `\n[SCHEDULER]`, `\t Successfully logged to file as: ${content}  `, `  ${column.datetime} ${column.timezone}\n`);
                     });
                     writeStatusDone(sheets, column.index);
@@ -262,10 +277,15 @@ module.exports = {
             myJob.cancel();
           }
         }
-
+        // only log to file on change of scheduled job count
+        if(Object.keys(schedule.scheduledJobs).length != prevScheduledJobCount) {
+          prevScheduledJobCount = Object.keys(schedule.scheduledJobs).length;
+          logger.log(`[SCHEDULER]\tScheduled jobs: ${Object.keys(schedule.scheduledJobs).length}\trefreshing... `);
+        }
         console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[32m%s\x1b[0m`, `[SCHEDULER]`, `\t Scheduled jobs: `, Object.keys(schedule.scheduledJobs).length, `\t refreshing... `);
 
       } else {
+        logger.log(`[SCHEDULER] No data found.`);
         console.log(`\x1b[33m%s\x1b[0m`, `[SCHEDULER]`, `\x1b[33m%s\x1b[0m`, 'No data found.');
       }
 
@@ -355,6 +375,7 @@ module.exports = {
             fs.writeFileSync('schedule.txt', scheduleContent.replaceAll('||', konceptSpacerEmote));
           }
         } catch(err) {
+          logger.log(`[LOGGER] Could not write schedule to text file.`);
           console.log(`\x1b[33m%s\x1b[0m`, `[LOGGER]`, `Could not write schedule to text file.`);
         }
       }

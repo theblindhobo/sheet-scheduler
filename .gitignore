@@ -7,3 +7,4 @@ schedule.txt
 token.json
 .env
 functions/webhook-anth.js
+logs
