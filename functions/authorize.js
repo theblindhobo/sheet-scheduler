@@ -4,7 +4,8 @@ const { google } = require('googleapis');
 const readline = require('readline');
 
 // If modifying these scopes, delete token.json.
-const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
+// const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
+const SCOPES = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/calendar.events'];
 const TOKEN_PATH = 'token.json';
 
 function getNewToken(oAuth2Client, callback) {

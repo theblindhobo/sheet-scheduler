@@ -8,6 +8,10 @@ var konceptSpacerEmote = 'koncep2SWING';
 var multiLinedVariable = ' ';
 var defaultTimezone = 'UTC';
 
+const { calendar } = require('./calendar/sortEvents.js');
+let calendarCounter = 0; // to determine sending rows information to calendar app
+var calendarRefreshStaysSame = 5; // 5 refreshes before sending information to calendar.js
+
 const {
   toTimestamp, clearDisplayDone,
   sendDisplay, writeStatusDone,
@@ -47,6 +51,8 @@ async function notifyUser(err) {
   }
 
 }
+
+
 
 module.exports = {
   sheetLogic: (google, auth, client) => {
@@ -147,6 +153,7 @@ module.exports = {
               // sets nowIndex
               if(column.datetime == 'NOW') {
                 nowIndex = column.index;
+                // set duration to 0.5 (30min block)
               }
 
               let now = Date.parse(new Date); // timestamp of the time right now
@@ -165,6 +172,7 @@ module.exports = {
                   let dT = `NOW: Demoscene | ${d[1]} ${d[0]} ${d[2]}`;
                   column.line1 = (column.line1 !== '') ? column.line1 : dT;
                   column.line2 = (column.line2 !== '') ? column.line2 : ' ';
+                  // set duration to 0.5 (30min block)
                   break;
                 default:
                   column.line1 = (column.line1 !== '') ? column.line1 : ' ';
@@ -327,9 +335,16 @@ module.exports = {
               myJob.cancel();
             }
           }
-          // only log to file on change of scheduled job count
-          if(Object.keys(schedule.scheduledJobs).length != prevScheduledJobCount) {
+
+          // Send to calendar logic, and counter (also for logging to text file)
+          if(calendarCounter >= calendarRefreshStaysSame) {
+            calendarCounter = 0;
+            calendar(auth, rows); // send 'rows' information to calendar app
+          } else if(Object.keys(schedule.scheduledJobs).length === prevScheduledJobCount) {
+            calendarCounter++
+          } else if(Object.keys(schedule.scheduledJobs).length != prevScheduledJobCount) {
             prevScheduledJobCount = Object.keys(schedule.scheduledJobs).length;
+            calendarCounter = 0; // reset calendarCounter if scheduled jobs change
             logger.log(`[SCHEDULER]\tScheduled jobs: ${Object.keys(schedule.scheduledJobs).length}\trefreshing... `);
           }
           console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[32m%s\x1b[0m`, `[SCHEDULER]`, `\t Scheduled jobs: `, Object.keys(schedule.scheduledJobs).length, `\t refreshing... `);

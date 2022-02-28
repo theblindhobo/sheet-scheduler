@@ -125,7 +125,7 @@ module.exports = {
 
         // post webhook
         try {
-          await fetch(process.env.LIVE_WEBHOOK_URL, {
+          await fetch(process.env.TEST_WEBHOOK_URL, {
             method: 'POST',
             body: JSON.stringify(params),
             headers: { 'Content-Type': 'application/json' }
