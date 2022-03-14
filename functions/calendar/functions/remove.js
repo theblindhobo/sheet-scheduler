@@ -22,11 +22,17 @@ module.exports = {
               calendarId: calendarID,
               eventId: id
             });
-            logger.log(`[CALENDAR]\t[REMOVE]\tDeleted ID: ${id}`);
-            console.log(`\x1b[33m%s\x1b[0m`, `[CALENDAR]\t[REMOVE]`, `\tDeleted ID: ${id}`);
+            logger.log(`[CALENDAR]\t[REMOVE]\tDeleted:\t${id}`);
+            console.log(`\x1b[33m%s\x1b[0m`, `[CALENDAR]\t[REMOVE]`, `\tDeleted:\t${id}`);
           } catch(err) {
-            logger.log(`[CALENDAR]\t[REMOVE]\tError: ${err}`);
-            console.log(`\x1b[31m%s\x1b[0m`, `[CALENDAR]\t[REMOVE]`, `\tError: `, err);
+            if(err.toString().includes(`Resource has been deleted`)) {
+              logger.log(`[CALENDAR]\t[REMOVE]\tError: Resource has been deleted (id: ${id})`);
+              console.log(`\x1b[31m%s\x1b[0m`, `[CALENDAR]\t[REMOVE]`, `\tError: Resource has been deleted (id: ${id})`);
+            } else {
+              logger.log(`[CALENDAR]\t[REMOVE]\tError: ${err}`);
+              console.log(`\x1b[31m%s\x1b[0m`, `[CALENDAR]\t[REMOVE]`, `\tError: `, err);
+            }
+
           }
         }, i * 3000);
       });

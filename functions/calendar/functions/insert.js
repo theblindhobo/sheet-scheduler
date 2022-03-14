@@ -44,11 +44,12 @@ module.exports = {
                 end: calEvent.end,
                 summary: summary,
                 location: location,
-                description: calEvent.line2
+                description: calEvent.line2,
+                guestsCanInviteOthers: true
               }
             });
-            logger.log(`[CALENDAR]\t[INSERT]\tInserted ID: ${res.data.id}`);
-            console.log(`\x1b[33m%s\x1b[0m`, `[CALENDAR]\t[INSERT]`, `\tInserted ID: ${res.data.id}`);
+            logger.log(`[CALENDAR]\t[INSERT]\tInserted:\t${calEvent.start.dateTime.replace('T', ' ').replace('Z', '').trim()} - ${summary}`);
+            console.log(`\x1b[33m%s\x1b[0m`, `[CALENDAR]\t[INSERT]`, `\tInserted:\t${calEvent.start.dateTime.replace('T', ' ').replace('Z', '').trim()} - ${summary}`);
           } catch(err) {
             logger.log(`[CALENDAR]\t[INSERT]\tError: ${err}`);
             console.log(`\x1b[31m%s\x1b[0m`, `[CALENDAR]\t[INSERT]`, `\tError: `, err);

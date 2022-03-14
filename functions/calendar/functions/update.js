@@ -48,8 +48,8 @@ module.exports = {
                 description: calEvent.updateInfo.line2
               }
             });
-            logger.log(`[CALENDAR]\t[UPDATE]\tUpdated ID: ${calEvent.updateId}`);
-            console.log(`\x1b[33m%s\x1b[0m`, `[CALENDAR]\t[UPDATE]`, `\tUpdated ID: ${calEvent.updateId}`);
+            logger.log(`[CALENDAR]\t[UPDATE]\tUpdated:\t${calEvent.updateInfo.start.dateTime.replace('T', ' ').replace('Z', '').trim()} - ${summary}`);
+            console.log(`\x1b[33m%s\x1b[0m`, `[CALENDAR]\t[UPDATE]`, `\tUpdated:\t${calEvent.updateInfo.start.dateTime.replace('T', ' ').replace('Z', '').trim()} - ${summary}`);
           } catch(err) {
             logger.log(`[CALENDAR]\t[UPDATE]\tError: ${err}`);
             console.log(`\x1b[31m%s\x1b[0m`, `[CALENDAR]\t[UPDATE]`, `\tError: `, err);

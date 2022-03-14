@@ -15,25 +15,27 @@ let prevRows;
 var sheetIndexStart = 5; // the row on the sheet to start looking at
 var longestDuration = 12; // in hours
 
-
 var actionArray = ['LIVE', 'VOD', 'DEMO'];
 var defaultTimezone = 'UTC';
 
 var minutesInPast = 10; // for checking 10mins in past up until future dates (to include NOW)
 
-
 module.exports = {
-  calendar: async (auth, rows) => {
+  calendar: async (auth, rows, dupesRowsSorted, keepsRowsSorted) => {
 
     // Use lodash to check if the current rows and prevRows are NOT equal
     if(!_.isEqual(rows, prevRows)) {
       // grab calendar
       const calendar = google.calendar({ version: 'v3', auth });
       const res = await calendar.events.list({
-        calendarId: calendarID
+        kind: "calendar#event",
+        calendarId: calendarID,
+        orderBy: "startTime",
+        singleEvents: true
       });
 
       let existingCalendarEvents = [];
+      let existingDuplicates = [];
       if(res.data.items.length > 0) {
         await res.data.items.map(async (item) => {
           var eventDetails = {
@@ -52,13 +54,22 @@ module.exports = {
             await existingCalendarEvents.push(eventDetails);
           }
         });
+        let prevStartTime;
+        // remove duplicate entries with same start time
+        await existingCalendarEvents.map(async (existingEvent) => {
+          if(_.isEqual(existingEvent.start, prevStartTime)) {
+            // push id of duplicate to existingDuplicates
+            await existingDuplicates.push(existingEvent.id);
+          }
+          prevStartTime = existingEvent.start;
+        });
+        existingCalendarEvents = await existingCalendarEvents.filter(item => !existingDuplicates.includes(item.id));
       }
 
       prevRows = rows; // set current rows to equal prevRows
 
       let pendingCalendarEvents = [];
       await rows.map(async (row) => {
-
         var column = {
           index: (row[0]) ? row[0] : '',
           status: (row[1]) ? row[1] : '',
@@ -69,9 +80,8 @@ module.exports = {
           line1: (row[6]) ? row[6] : '',
           line2: (row[7]) ? row[7] : '',
         };
-
         // starts looking at and after this index
-        if(column.index >= sheetIndexStart) {
+        if(column.index >= sheetIndexStart && keepsRowsSorted.includes(column.index)) {
           // checks start time is valid date
           if(!isNaN(Date.parse(column.datetime + ' ' + column.timezone))) {
             // check if action is LIVE, DEMO, or VOD
@@ -139,7 +149,6 @@ module.exports = {
             }
           }
         }
-
       });
 
       let _newEvents = [];
@@ -149,6 +158,15 @@ module.exports = {
       let _other = [];
       let _checkEvent = [];
       if(existingCalendarEvents.length > 0) {
+        let existingUpcomingEvents = [];
+        await existingCalendarEvents.map(async (existingEvent) => {
+          var newDateNow = new Date(Date.now());
+          if(newDateNow.setMinutes(newDateNow.getMinutes() - minutesInPast) <= (new Date(Date.parse(existingEvent.start.split(' ')[0]))).getTime()) {
+            await existingUpcomingEvents.push(existingEvent);
+          }
+        });
+        existingCalendarEvents = existingUpcomingEvents;
+
         // iterate through each of existing to see if pending is new, update, or need remove
         await existingCalendarEvents.map(async (existingEvent) => {
           // check against each pending
@@ -183,14 +201,26 @@ module.exports = {
         _newEvents = pendingCalendarEvents;
       }
 
-
-
       _newEvents = await [...new Set(_newEvents)]; // unique
       _exactEvent = await [...new Set(_exactEvent)]; // unique
       _sameStartTimeEvent = await [...new Set(_sameStartTimeEvent)]; // unique
       _diffStartTimeEvent = await [...new Set(_diffStartTimeEvent)]; // unique
       _other = await [...new Set(_other)]; // unique
       _checkEvent = await [...new Set(_checkEvent)]; // unique
+
+      // check _sameStartTimeEvent against dupes
+      if(_sameStartTimeEvent.length > 0) {
+        _sameStartTimeEvent = await _sameStartTimeEvent.filter(item => !dupesRowsSorted.includes(item.updateInfo.index));
+      }
+
+      /*
+      console.log(`[_newEvents]`, _newEvents);
+      console.log(`[_exactEvent]`, _exactEvent);
+      console.log(`[_sameStartTimeEvent]`, _sameStartTimeEvent);
+      console.log(`[_diffStartTimeEvent]`, _diffStartTimeEvent);
+      console.log(`[_other]`, _other);
+      console.log(`[_checkEvent]`, _checkEvent);
+      */
 
       let _exactMatches = [];
       // check exact events from diffStartTime and remove any from _diffStartTimeEvent (cause if the event is exact... it isnt going to be added again)
@@ -224,6 +254,7 @@ module.exports = {
       }
 
       let _eventExists = [];
+      let deleteExistingEvents = [];
       if(_checkEvent.length > 0) {
         await _checkEvent.map(async (checkEvent) => {
           // check against each array?
@@ -292,15 +323,25 @@ module.exports = {
             }
           });
         });
+        deleteExistingEvents = await _checkEvent.filter(item => !_eventExists.includes(item));
+      } else {
+        deleteExistingEvents = existingCalendarEvents;
       }
+
       let mightDeleteTheseEvents = [];
       let _eventExistsIds = [];
-      await _eventExists.map(async (eventExists) => await _eventExistsIds.push(eventExists.eventId));
-      await existingCalendarEvents.filter(async (existingEvent) => {
-        await _eventExistsIds.map(async (eventId) => {
-          if(existingEvent.id !== eventId) await mightDeleteTheseEvents.push(existingEvent.id);
+      if(_eventExists.length > 0) {
+        await _eventExists.map(async (eventExists) => await _eventExistsIds.push(eventExists.eventId));
+        await existingCalendarEvents.filter(async (existingEvent) => {
+          await _eventExistsIds.map(async (eventId) => {
+            if(existingEvent.id !== eventId) await mightDeleteTheseEvents.push(existingEvent.id);
+          });
         });
-      });
+      } else {
+        await deleteExistingEvents.map(async (existingEvent) => {
+          await mightDeleteTheseEvents.push(existingEvent.id);
+        });
+      }
 
       mightDeleteTheseEvents = await [...new Set(mightDeleteTheseEvents)];
       let deleteTheseEvents = await mightDeleteTheseEvents.filter(item => !_eventExistsIds.includes(item));
@@ -318,28 +359,20 @@ module.exports = {
         deleteTheseEvents = await deleteTheseEvents.filter(item => !dontDeleteEvents.includes(item));
       }
 
-
-
-
-      var insertArray = _diffStartTimeEvent.concat(_newEvents); // these should be brand new entries
+      var insertArray = await _diffStartTimeEvent.concat(_newEvents); // these should be brand new entries
       var updateArray = _sameStartTimeEvent; // these should be events that need updating
-      var removeArray = deleteTheseEvents; // these should be all events to delete
+      var removeArray = await deleteTheseEvents.concat(existingDuplicates); // these should be all events to delete
+
+      // console.log(`[insertArray]`, insertArray);
+      // console.log(`[updateArray]`, updateArray);
+      // console.log(`[removeArray]`, removeArray);
 
       await insert(auth, insertArray); // send new events to insert.js
       await update(auth, updateArray); // send update events to update.js
       await remove(auth, removeArray); // send delete events to remove.js
 
-
-
-
-
-
-
     } else {
       // console.log('those rows are identical');
     }
-    // await console.log('7');
-
-
   }
 }
