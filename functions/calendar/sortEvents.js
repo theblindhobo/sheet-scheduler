@@ -79,67 +79,71 @@ module.exports = {
           source: (row[5]) ? row[5] : '',
           line1: (row[6]) ? row[6] : '',
           line2: (row[7]) ? row[7] : '',
+          duration: (!isNaN(parseFloat(row[8]))) ? row[8] : '1'
         };
+
+        column.line1 = column.line1.replace(/\[![^\]]*\]/g, '').trim().replace(/live:/gi, '').trim().replace(/  +/g, ' '); // removes [!xxxx] and LIVE: and extra spaces
+
         // starts looking at and after this index
         if(column.index >= sheetIndexStart && keepsRowsSorted.includes(column.index)) {
           // checks start time is valid date
           if(!isNaN(Date.parse(column.datetime + ' ' + column.timezone))) {
             // check if action is LIVE, DEMO, or VOD
             if(column.action !== '' && actionArray.includes(column.action)) {
-              // set line1 if missing (for Cal entry)
-              switch(column.action) {
-                case 'LIVE':
-                  column.line1 = (column.line1 !== '') ? column.line1 : ((column.source !== '') ? `${column.action} - ${column.source}` : column.action);
-                  break;
-                case 'VOD':
-                  column.line1 = (column.line1 !== '') ? column.line1 : ((column.source !== '') ? `${column.action} - ${column.source}` : column.action);
-                  break;
-                case 'DEMO':
-                  column.line1 = (column.line1 !== '') ? column.line1 : `Demoscene`;
-                  break;
-                default:
-                  column.line1 = (column.line1 !== '') ? column.line1 : 'KONCEPT Event';
-              }
-              // if date is not in the past, continue (or past 10mins)
-              var newDateNow = new Date(Date.now());
-              if(newDateNow.setMinutes(newDateNow.getMinutes() - minutesInPast) <= (new Date(Date.parse(column.datetime + ' ' + column.timezone))).getTime()) {
-                column.start = {
-                  dateTime: new Date(Date.parse(column.datetime + ' ' + column.timezone)).toISOString().split('.')[0]+'Z',
-                  timeZone: column.timezone
-                };
+              if((column.action === 'LIVE' && column.source !== '') || (column.action === 'VOD' && column.source !== '') || (column.action === 'DEMO')) {
+                // set line1 if missing (for Cal entry)
+                switch(column.action) {
+                  case 'LIVE':
+                    column.line1 = (column.line1 !== '') ? column.line1 : ((column.source !== '') ? `${column.action} - ${column.source}` : column.action);
+                    break;
+                  case 'VOD':
+                    column.line1 = (column.line1 !== '') ? column.line1 : ((column.source !== '') ? column.action : column.action);
+                    break;
+                  case 'DEMO':
+                    column.line1 = (column.line1 !== '') ? column.line1 : `Demoscene`;
+                    break;
+                  default:
+                    column.line1 = (column.line1 !== '') ? column.line1 : 'KONCEPT Event';
+                }
+                // if date is not in the past, continue (or past 10mins)
+                var newDateNow = new Date(Date.now());
+                if(newDateNow.setMinutes(newDateNow.getMinutes() - minutesInPast) <= (new Date(Date.parse(column.datetime + ' ' + column.timezone))).getTime()) {
+                  column.start = {
+                    dateTime: new Date(Date.parse(column.datetime + ' ' + column.timezone)).toISOString().split('.')[0]+'Z',
+                    timeZone: column.timezone
+                  };
 
-                let duration = '1';
-                column.duration = duration;
-                // checks duration is a number
-                if(!isNaN(parseFloat(column.duration))) {
-                  // checks duration is under the max allowed time
-                  if(!(parseFloat(column.duration) >= longestDuration)) {
-                    // splits duration into array: [ hours, minutes ]
-                    var splitHourMin = [
-                        (parseFloat(column.duration) > 0) ? Math.floor(parseFloat(column.duration)) : Math.ceil(parseFloat(column.duration)),
-                        parseFloat(column.duration) % 1
-                    ];
-                    // adds duration to start time to get end time
-                    var workingEndDate = new Date(Date.parse(column.datetime + ' ' + column.timezone));
-                    workingEndDate.setHours(workingEndDate.getHours() + splitHourMin[0]);
-                    workingEndDate.setMinutes(workingEndDate.getMinutes() + Math.floor(splitHourMin[1] * 60));
-                    column.end = await {
-                      dateTime: workingEndDate.toISOString().split('.')[0]+'Z',
-                      timeZone: column.timezone
-                    };
+                  // checks duration is a number
+                  if(!isNaN(parseFloat(column.duration))) {
+                    // checks duration is under the max allowed time
+                    if(!(parseFloat(column.duration) >= longestDuration)) {
+                      // splits duration into array: [ hours, minutes ]
+                      var splitHourMin = [
+                          (parseFloat(column.duration) > 0) ? Math.floor(parseFloat(column.duration)) : Math.ceil(parseFloat(column.duration)),
+                          parseFloat(column.duration) % 1
+                      ];
+                      // adds duration to start time to get end time
+                      var workingEndDate = new Date(Date.parse(column.datetime + ' ' + column.timezone));
+                      workingEndDate.setHours(workingEndDate.getHours() + splitHourMin[0]);
+                      workingEndDate.setMinutes(workingEndDate.getMinutes() + Math.floor(splitHourMin[1] * 60));
+                      column.end = await {
+                        dateTime: workingEndDate.toISOString().split('.')[0]+'Z',
+                        timeZone: column.timezone
+                      };
+                    } else {
+                      logger.log(`[CALENDAR]\t\tDuration is too long. Setting end time to be exact as start time.`);
+                      console.log(`\x1b[33m%s\x1b[0m`, `[CALENDAR]`, `\t\tDuration is too long. Setting end time to be exact as start time.`);
+                      column.end = column.start;
+                    }
                   } else {
-                    logger.log(`[CALENDAR]\t\tDuration is too long. Setting end time to be exact as start time.`);
-                    console.log(`\x1b[33m%s\x1b[0m`, `[CALENDAR]`, `\t\tDuration is too long. Setting end time to be exact as start time.`);
+                    logger.log(`[CALENDAR]\t\tDuration is not a valid number. Setting end time to be exact as start time.`);
+                    console.log(`\x1b[33m%s\x1b[0m`, `[CALENDAR]`, `\t\tDuration is not a valid number. Setting end time to be exact as start time.`);
                     column.end = column.start;
                   }
-                } else {
-                  logger.log(`[CALENDAR]\t\tDuration is not a valid number. Setting end time to be exact as start time.`);
-                  console.log(`\x1b[33m%s\x1b[0m`, `[CALENDAR]`, `\t\tDuration is not a valid number. Setting end time to be exact as start time.`);
-                  column.end = column.start;
+                  // push these to an array outside of 'map' ?
+                  // check if theres another event with same start time
+                  await pendingCalendarEvents.push(column);
                 }
-                // push these to an array outside of 'map' ?
-                // check if theres another event with same start time
-                await pendingCalendarEvents.push(column);
               }
             }
           } else {

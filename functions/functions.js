@@ -9,6 +9,7 @@ var sheetColumn = {
   line2: 'G'
 };
 
+// DISABLING COUNTERS ON EVERYTHING
 let clearDisplayDoneCounter = 0; //
 let writeStatusDoneCounter = 0; //
 let writeStatusScheduledCounter = 0; //
@@ -21,7 +22,7 @@ module.exports = {
   },
   clearDisplayDone: (sheets, index) => {
     if(clearDisplayDoneCounter >= 10) clearDisplayDoneCounter = 0;
-    clearDisplayDoneCounter++;
+    // clearDisplayDoneCounter++;
     setTimeout(() => {
       let status = ''
       let values = [
@@ -67,7 +68,7 @@ module.exports = {
   },
   writeStatusDone: (sheets, index) => {
     if(writeStatusDoneCounter >= 10) writeStatusDoneCounter = 0;
-    writeStatusDoneCounter++;
+    // writeStatusDoneCounter++;
     setTimeout(() => {
       let range = `${sheetName}!${sheetColumn.status}${index}`;
       let status = 'DONE'
@@ -97,7 +98,7 @@ module.exports = {
   },
   writeStatusScheduled: (sheets, index) => {
     if(writeStatusScheduledCounter >= 10) writeStatusScheduledCounter = 0;
-    writeStatusScheduledCounter++;
+    // writeStatusScheduledCounter++;
     // check if STATUS says scheduled already, if not.. write it
     setTimeout(() => {
       sheets.spreadsheets.values.get({
@@ -139,7 +140,7 @@ module.exports = {
   },
   cleanupStatus: async (sheets, index) => {
     if(cleanupStatusCounter >= 10) cleanupStatusCounter = 0;
-    cleanupStatusCounter++;
+    // cleanupStatusCounter++;
     setTimeout(() => {
       sheets.spreadsheets.values.get({
         spreadsheetId: process.env.SPREADSHEET_ID,

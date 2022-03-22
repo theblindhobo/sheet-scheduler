@@ -72,7 +72,7 @@ module.exports = {
       if(!isNaN(Date.parse(rowObj.datetime))) {
         var timestampDate = new Date();
 
-        var descriptionLine1 = (rowObj.line1.substring(0,5).toLowerCase() == 'live:') ? rowObj.line1.slice(5).trim() : rowObj.line1
+        var descriptionLine1 = (rowObj.line1 !== undefined || rowObj.line1 !== '') ? rowObj.line1.replace(/\[![^\]]*\]/g, '').trim().replace(/live:/gi, '').trim().replace(/  +/g, ' ') : ' ';
 
         var twitchRegex = /(http:\/\/|https:\/\/|ftp:\/\/)?(www.)?(twitch.tv\/)\w+/gi;
         var twitchUserRegex = /(http:\/\/|https:\/\/|ftp:\/\/)?(www.)?(twitch.tv\/)/gi;

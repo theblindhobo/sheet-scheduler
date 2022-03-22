@@ -103,9 +103,9 @@ module.exports = {
         if (rows.length) {
 
           let rowIndex = 0;
-          // maps through each row individually
-
           let rowsFiltered = [];
+
+          // maps through each row individually
           await rows.map(async (row) => {
             row.unshift(rowIndex + 2); // sets index at beginning of each row array
             rowIndex++;
@@ -130,8 +130,59 @@ module.exports = {
 
             if(column.index) await rowsFiltered.push(column);
 
+            if(column.datetime == 'DISPLAY' && column.index == 2) {
+              // send Quick Display titles without logging to file
+              column.line1 = (column.line1 !== '') ? column.line1 : ' ';
+              column.line2 = (column.line2 !== '') ? column.line2 : ' ';
+
+              try {
+                fs.writeFileSync('title1.txt', column.line1);
+                fs.writeFileSync('title2.txt', column.line2);
+              } catch(err) {
+                logger.log(`[TITLES] Could not write to title text file.`);
+                console.log(`\x1b[33m%s\x1b[0m`, `[TITLES]`, `Could not write to title text file.`);
+              }
+
+              let displayObj;
+              let socket = client ? client : 'closed';
+              if(socket == 'closed') {
+                logger.log(`[WEBSOCKET] Couldn't send titles to websocket. Socket is closed.`);
+                console.log(`\x1b[35m%s\x1b[0m`, `\n[WEBSOCKET]`, `Couldn't send titles to websocket. Socket is closed.`);
+              } else {
+                displayObj = {
+                    "event": "titles",
+                    "data": {
+                      "action": 'DISPLAY',
+                      "source": '',
+                      "name": 'Quick Display',
+                      "line1": column.line1,
+                      "line2": column.line2
+                    }
+                };
+                if(socket.readyState == 1) {
+                  await sendDisplay(socket, displayObj);
+                } else {
+                  logger.log(`[WEBSOCKET] Couldn't send Quick Display to websocket. Socket is closed, closing, or reconnecting. Try again later.`);
+                  console.log(`\x1b[35m%s\x1b[0m`, `\n[WEBSOCKET]`, `Couldn't send Quick Display to websocket. Socket is closed, closing, or reconnecting. Try again later.`);
+                }
+                await clearDisplayDone(sheets, column.index);
+              }
+            }
+
             if(column.status == 'SCHEDULED') {
               if(column.datetime == undefined || column.datetime == '') {
+                await cleanupStatus(sheets, column.index);
+              }
+            } else if(column.status == 'DONE') {
+              if(column.datetime != undefined || column.datetime !== '') { // datetime not blank '' or undefined
+                if(new Date(column.datetime) instanceof Date) { // datetime is a valid date
+                  if((toTimestamp(`${column.datetime} ${defaultTimezone}`)) * 1000 < Date.parse(new Date)) { // datetime is in the past
+                    // date in past
+                  } else {
+                    await cleanupStatus(sheets, column.index); // date not in past
+                  }
+                }
+              } else {
                 await cleanupStatus(sheets, column.index);
               }
             }
@@ -169,55 +220,17 @@ module.exports = {
             if(dupesRowsSorted.includes(row.index)) {
               // remove 'SCHEDULED'
               if(row.status == 'SCHEDULED') {
-                cleanupStatus(sheets, row.index);
+                await cleanupStatus(sheets, row.index);
               }
             } else {
               let column = row;
-              if(column.datetime == 'DISPLAY' && column.index == 2) {
-                // send Quick Display titles without logging to file
-                column.line1 = (column.line1 !== '') ? column.line1 : ' ';
-                column.line2 = (column.line2 !== '') ? column.line2 : ' ';
-
-                try {
-                  fs.writeFileSync('title1.txt', column.line1);
-                  fs.writeFileSync('title2.txt', column.line2);
-                } catch(err) {
-                  logger.log(`[TITLES] Could not write to title text file.`);
-                  console.log(`\x1b[33m%s\x1b[0m`, `[TITLES]`, `Could not write to title text file.`);
-                }
-
-                let displayObj;
-                let socket = client ? client : 'closed';
-                if(socket == 'closed') {
-                  logger.log(`[WEBSOCKET] Couldn't send titles to websocket. Socket is closed.`);
-                  console.log(`\x1b[35m%s\x1b[0m`, `\n[WEBSOCKET]`, `Couldn't send titles to websocket. Socket is closed.`);
-                } else {
-                  displayObj = {
-                      "event": "titles",
-                      "data": {
-                        "action": 'DISPLAY',
-                        "source": '',
-                        "name": 'Quick Display',
-                        "line1": column.line1,
-                        "line2": column.line2
-                      }
-                  };
-                  if(socket.readyState == 1) {
-                    sendDisplay(socket, displayObj);
-                  } else {
-                    logger.log(`[WEBSOCKET] Couldn't send Quick Display to websocket. Socket is closed, closing, or reconnecting. Try again later.`);
-                    console.log(`\x1b[35m%s\x1b[0m`, `\n[WEBSOCKET]`, `Couldn't send Quick Display to websocket. Socket is closed, closing, or reconnecting. Try again later.`);
-                  }
-                  clearDisplayDone(sheets, column.index);
-              }
-            } else if((column.index >= 5 && !isNaN(new Date(column.datetime)) && actionArray.includes(column.action)) || (column.index >= 5 && column.datetime == 'NOW' && actionArray.includes(column.action))) {
+              if((column.index >= 5 && !isNaN(new Date(column.datetime)) && actionArray.includes(column.action)) || (column.index >= 5 && column.datetime == 'NOW' && actionArray.includes(column.action))) {
                 // Checks if action LIVE, DEMO, or VOD
                 // Check DATETIME is a date or 'NOW'
 
                 // sets nowIndex
                 if(column.datetime == 'NOW') {
                   nowIndex = column.index;
-                  // set duration to 0.5 (30min block)
                 }
 
                 let now = Date.parse(new Date); // timestamp of the time right now
@@ -236,7 +249,6 @@ module.exports = {
                     let dT = `NOW: Demoscene | ${d[1]} ${d[0]} ${d[2]}`;
                     column.line1 = (column.line1 !== '') ? column.line1 : dT;
                     column.line2 = (column.line2 !== '') ? column.line2 : ' ';
-                    // set duration to 0.5 (30min block)
                     break;
                   default:
                     column.line1 = (column.line1 !== '') ? column.line1 : ' ';
@@ -275,9 +287,16 @@ module.exports = {
                       }
 
 
+                      if(column.status !== 'SCHEDULED' && column.datetime !== '' && column.action !== '' && !(timestamp * 1000 < now)) {
+                        // check if not dupe start time (keep highest index)
+                        // push to array and check outside of the 'map' function
+                        await writeStatusScheduled(sheets, column.index);
+                      }
+
+
 
                       // schedule job
-                      var j = schedule.scheduleJob(`${timestamp}`, date, function() {
+                      var j = schedule.scheduleJob(`${timestamp}`, date, async function() {
 
                         if(column.datetime == 'NOW') {
                           column.datetime = (date.getUTCMonth()+1) + '/' + date.getUTCDate() + '/' + date.getUTCFullYear() + ' ' + date.getUTCHours() + ':' + date.getUTCMinutes() + ':' + date.getUTCSeconds();
@@ -353,19 +372,9 @@ module.exports = {
                           logger.log(`[SCHEDULER]\tSuccessfully logged to file as: ${content} - ${column.datetime} ${column.timezone}`);
                           console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `\n[SCHEDULER]`, `\t Successfully logged to file as: ${content}  `, `  ${column.datetime} ${column.timezone}\n`);
                         });
-                        writeStatusDone(sheets, column.index);
+                        await writeStatusDone(sheets, column.index);
                       });
 
-
-
-                      if(column.status !== 'SCHEDULED' && column.datetime !== '' && column.action !== '') {
-                        // check if not dupe start time (keep highest index)
-                        // push to array and check outside of the 'map' function
-
-                        writeStatusScheduled(sheets, column.index);
-
-                        // await checkIfWriteScheduled.push(column.index);
-                      }
 
 
 
@@ -378,30 +387,17 @@ module.exports = {
               if((toTimestamp(`${column.datetime} ${defaultTimezone}`)) * 1000 > Date.parse(new Date)) {
                 await scheduledRows.push(column);
               }
-              if(column.status == 'SCHEDULED') {
-                if(column.datetime != undefined || column.datetime !== '') {
-                  if(!jobs.includes(toTimestamp(`${column.datetime} ${defaultTimezone}`))) {
-                    // how to check if theres multiple exact times
-                    cleanupStatus(sheets, column.index);
-                  } else {
-                    if(!isNaN(Date.parse(column.datetime))) {
-                      currSchedule.push(Object.values(column));
-                    }
-                  }
-                } else {
-                  cleanupStatus(sheets, column.index);
-                }
-              } else if(column.status == 'DONE') {
+              if(column.status == 'DONE') {
                 if(column.datetime != undefined || column.datetime !== '') { // datetime not blank '' or undefined
                   if(new Date(column.datetime) instanceof Date) { // datetime is a valid date
                     if((toTimestamp(`${column.datetime} ${defaultTimezone}`)) * 1000 < Date.parse(new Date)) { // datetime is in the past
                       // date in past
                     } else {
-                      cleanupStatus(sheets, column.index); // date not in past
+                      await cleanupStatus(sheets, column.index); // date not in past
                     }
                   }
                 } else {
-                  cleanupStatus(sheets, column.index);
+                  await cleanupStatus(sheets, column.index);
                 }
               }
             }
@@ -432,7 +428,9 @@ module.exports = {
           });
 
           // now send dupes to be removed `SCHEDULED`
-          await dupes.forEach(dupe => cleanupStatus(sheets, dupe));
+          await dupes.forEach(async dupe => {
+            await cleanupStatus(sheets, dupe);
+          });
           prevDupe = dupes;
 
           // Check and remove any entries that may have changed their scheduled time
@@ -495,16 +493,14 @@ module.exports = {
                 break;
               case 'VOD':
                 // push datetime and ''
-                scheduleLog.push([sortedDate, (sortedColumn.line1 != undefined && sortedColumn.line1 !== '') ? sortedColumn.line1.trim() : `VOD`]);
+                scheduleLog.push([sortedDate, (sortedColumn.line1 != undefined && sortedColumn.line1 !== '') ? sortedColumn.line1.replace(/\[![^\]]*\]/g, '').trim().replace(/  +/g, ' ') : `VOD`]);
                 break;
               case 'LIVE':
                 // push datetime and remove 'LIVE:' from line1, then push formatted line1 to log array
                 if(sortedColumn.line1 != undefined && sortedColumn.line1 !== '') {
-                  if(sortedColumn.line1.toLowerCase().includes('live:')) {
-                    scheduleLog.push([sortedDate, (sortedColumn.line1 != undefined && sortedColumn.line1 !== '') ? sortedColumn.line1.replace(/live:/gi, '').trim() : `LIVE`]);
-                  } else {
-                    scheduleLog.push([sortedDate, (sortedColumn.line1 != undefined && sortedColumn.line1 !== '') ? sortedColumn.line1.trim() : `LIVE`]);
-                  }
+                  scheduleLog.push([sortedDate, sortedColumn.line1.replace(/\[![^\]]*\]/g, '').trim().replace(/live:/gi, '').trim().replace(/  +/g, ' ')]); // replaces any [!xxxx] with '', and replaces LIVE: with ''
+                } else {
+                  scheduleLog.push([sortedDate, `LIVE`]);
                 }
                 break;
               default:
