@@ -11,16 +11,20 @@ const TOKEN_PATH = 'token.json';
 function getNewToken(oAuth2Client, callback) {
   const authUrl = oAuth2Client.generateAuthUrl({
     access_type: 'offline',
+    prompt: 'consent',
     scope: SCOPES,
   });
   logger.log(`[AUTHORIZE]\tAuthorize this app by visiting this url: ${authUrl}`);
+  // console.log(`[AUTHORIZE]\tAuthorize this app by visiting this url: ${authUrl}`);
   console.log(`[AUTHORIZE]\tAuthorize this app by visiting this url: ${authUrl}`);
+
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
-  rl.question('Enter the code from that page here: ', (code) => {
+  rl.question('Enter the code from that page here: ', async (code) => {
     rl.close();
+    code = await decodeURIComponent(code);
     oAuth2Client.getToken(code, (err, token) => {
       if (err) return console.error('Error while trying to retrieve access token', err);
       oAuth2Client.setCredentials(token);

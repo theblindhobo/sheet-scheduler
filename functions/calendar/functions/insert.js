@@ -21,11 +21,11 @@ module.exports = {
           let summary;
           switch(calEvent.action) {
             case 'LIVE':
-              location = (calEvent.source !== '') ? `${calEvent.action} - ${calEvent.source}` : calEvent.action;
+              location = calEvent.action;
               summary = calEvent.line1.replace(/live:/gi, '').trim();
               break;
             case 'VOD':
-              location = (calEvent.source !== '') ? `${calEvent.action} - ${calEvent.source}` : calEvent.action;
+              location = calEvent.action;
               summary = calEvent.line1.trim();
               break;
             case 'DEMO':

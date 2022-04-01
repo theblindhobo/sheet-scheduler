@@ -114,12 +114,13 @@ module.exports = {
               index: (row[0]) ? row[0] : '',
               status: (row[1]) ? row[1] : '',
               datetime: (row[2]) ? row[2] : '',
-              timezone: (row[3] == defaultTimezone) ? row[3] : defaultTimezone,
+              timezone: defaultTimezone,
               action: (row[4]) ? row[4] : '',
               source: (row[5]) ? row[5] : '',
               line1: (row[6]) ? row[6] : '',
               line2: (row[7]) ? row[7] : '',
             }
+            // row[3] is now twitchID
 
             if(column.datetime !== '' && !isNaN(Date.parse(column.datetime))) {
               let tempDate = (new Date(Date.parse(column.datetime + ' ' + column.timezone)));
@@ -387,7 +388,22 @@ module.exports = {
               if((toTimestamp(`${column.datetime} ${defaultTimezone}`)) * 1000 > Date.parse(new Date)) {
                 await scheduledRows.push(column);
               }
-              if(column.status == 'DONE') {
+
+              // for !schedule
+              if(column.status == 'SCHEDULED') {
+                if(column.datetime != undefined || column.datetime !== '') {
+                  if(!jobs.includes(toTimestamp(`${column.datetime} ${defaultTimezone}`))) {
+                    // how to check if theres multiple exact times
+                    await cleanupStatus(sheets, column.index);
+                  } else {
+                    if(!isNaN(Date.parse(column.datetime))) {
+                      await currSchedule.push(Object.values(column));
+                    }
+                  }
+                } else {
+                  await cleanupStatus(sheets, column.index);
+                }
+              } else if(column.status == 'DONE') {
                 if(column.datetime != undefined || column.datetime !== '') { // datetime not blank '' or undefined
                   if(new Date(column.datetime) instanceof Date) { // datetime is a valid date
                     if((toTimestamp(`${column.datetime} ${defaultTimezone}`)) * 1000 < Date.parse(new Date)) { // datetime is in the past
@@ -470,7 +486,7 @@ module.exports = {
         var sortedSchedule = currSchedule.sort(function(a,b) {
           return Date.parse(a[2])-Date.parse(b[2]);
         });
-        sortedSchedule = sortedSchedule.slice(0, 5)
+        sortedSchedule = sortedSchedule.slice(0, 5);
         let scheduleLog = [];
         await sortedSchedule.map(async (sortedRow) => {
           var sortedColumn = {
@@ -563,43 +579,6 @@ module.exports = {
             }
           })
 
-          /*
-          for(let i = 0; i < scheduleLog.length; i++) {
-            // turn from defaultTimezone to EST
-            if(!isNaN(Date.parse(scheduleLog[i][0]))) {
-              const dEST = new Intl.DateTimeFormat(undefined, {
-                timeZone: 'America/New_York',
-                timeZoneName: 'short',
-                hourCycle: 'h24',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                weekday: 'short',
-                hour: '2-digit',
-                minute: '2-digit'
-              }).format(Date.parse(scheduleLog[i][0]));
-              switch(dEST.split(',')[2].trim().split(' ')[1]) {
-                case 'GMT+9':
-                  tz = `(JST) `;
-                  break;
-                default:
-                  tz = `(${dEST.split(',')[2].trim().split(' ')[1]}) `;
-              }
-              let currDate = dEST.split(',')[1].trim();
-              let hour = dEST.split(',')[2].trim().split(' ')[0].trim().replace(':', '');
-              hour = (hour.substring(0,2) == '24') ? hour.replace(/^.{2}/g, '00') : hour;
-              // if scheduled job is on same day, only write date once to log
-              if(prevDate == currDate) {
-                finalScheduleLog.push(' ' + hour + ': ' + scheduleLog[i][1])
-              } else {
-                let dayName = dEST.split(',')[0].trim();
-                let monthDay = new Date(dEST.split(',')[1].trim()).toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
-                finalScheduleLog.push('| ' + dayName + ' ' + monthDay + ' - ' + hour + ': ' + scheduleLog[i][1])
-                prevDate = currDate;
-              }
-            }
-          }
-          */
 
 
           // write to schedule.txt

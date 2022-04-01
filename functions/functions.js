@@ -205,6 +205,9 @@ module.exports = {
       } else {
         logger.log(`[SCHEDULER]\tDATETIME updated at cell ${sheetColumn.datetime}${index}`);
         console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `[SCHEDULER]`, `\t DATETIME updated at cell `, `${sheetColumn.datetime}${index}`);
+        setTimeout(() => {
+          module.exports.writeStatusDone(sheets, index);
+        }, 3000);
       }
     });
   }

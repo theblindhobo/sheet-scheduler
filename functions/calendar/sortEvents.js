@@ -13,7 +13,7 @@ const { remove } = require('./functions/remove.js');
 
 let prevRows;
 var sheetIndexStart = 5; // the row on the sheet to start looking at
-var longestDuration = 12; // in hours
+var longestDuration = 20; // in hours
 
 var actionArray = ['LIVE', 'VOD', 'DEMO'];
 var defaultTimezone = 'UTC';
@@ -43,7 +43,7 @@ module.exports = {
             iCalUID: item.iCalUID,
             start: item.start.dateTime + ' ' + item.start.timeZone,
             end: item.end.dateTime + ' ' + item.end.timeZone,
-            actionSource: item.location,
+            action: item.location,
             line1: item.summary,
             line2: (item.description) ? item.description.replace( /(<([^>]+)>)/ig, '') : ''
           };
@@ -74,13 +74,14 @@ module.exports = {
           index: (row[0]) ? row[0] : '',
           status: (row[1]) ? row[1] : '',
           datetime: (row[2]) ? row[2] : '',
-          timezone: (row[3] == defaultTimezone) ? row[3] : defaultTimezone,
+          timezone: defaultTimezone,
           action: (row[4]) ? row[4] : '',
           source: (row[5]) ? row[5] : '',
           line1: (row[6]) ? row[6] : '',
           line2: (row[7]) ? row[7] : '',
           duration: (!isNaN(parseFloat(row[8]))) ? row[8] : '1'
         };
+        // row[3] is now twitchID
 
         column.line1 = column.line1.replace(/\[![^\]]*\]/g, '').trim().replace(/live:/gi, '').trim().replace(/  +/g, ' '); // removes [!xxxx] and LIVE: and extra spaces
 
@@ -161,6 +162,9 @@ module.exports = {
       let _diffStartTimeEvent = [];
       let _other = [];
       let _checkEvent = [];
+
+      // console.log(`[existingCalendarEvents.length]`, existingCalendarEvents.length);
+
       if(existingCalendarEvents.length > 0) {
         let existingUpcomingEvents = [];
         await existingCalendarEvents.map(async (existingEvent) => {
@@ -177,20 +181,19 @@ module.exports = {
           await pendingCalendarEvents.map(async (pendingEvent) => {
             let checkStartTime = (pendingEvent.start.dateTime + ' ' + pendingEvent.start.timeZone === existingEvent.start);
             let checkEndTime = (pendingEvent.end.dateTime + ' ' + pendingEvent.end.timeZone === existingEvent.end);
-            let checkAction = (existingEvent.actionSource.split(' ').includes(pendingEvent.action));
-            let checkSource = (existingEvent.actionSource.split(' ').includes(pendingEvent.source) || (pendingEvent.action === 'DEMO' && existingEvent.actionSource === 'DEMO'));
+            let checkAction = (existingEvent.action === pendingEvent.action);
             let checkLine1 = (pendingEvent.line1.replace(/live:/gi, '').trim() === existingEvent.line1);
             let checkLine2 = (pendingEvent.line2 === existingEvent.line2);
             // if all fields exist - event already exists on calendar & no updates needed
-            if(checkStartTime && checkEndTime && checkAction && checkSource && checkLine1 && checkLine2) {
+            if(checkStartTime && checkEndTime && checkAction && checkLine1 && checkLine2) {
               await _exactEvent.push(pendingEvent);
-            } else if(checkStartTime && !(checkEndTime && checkAction && checkSource && checkLine1 && checkLine2)) {
+            } else if(checkStartTime && !(checkEndTime && checkAction && checkLine1 && checkLine2)) {
               // if start times are the same but other fields are different, update existing event with new info
               await _sameStartTimeEvent.push({
                 updateId: existingEvent.id,
                 updateInfo: pendingEvent
               });
-            } else if(!(checkStartTime && checkEndTime && checkAction && checkSource && checkLine1 && checkLine2)) {
+            } else if(!(checkStartTime && checkEndTime && checkAction && checkLine1 && checkLine2)) {
               // start time doesnt match
               await _diffStartTimeEvent.push(pendingEvent);
               await _checkEvent.push(existingEvent);
@@ -212,10 +215,16 @@ module.exports = {
       _other = await [...new Set(_other)]; // unique
       _checkEvent = await [...new Set(_checkEvent)]; // unique
 
+
+      // console.log(`[_sameStartTimeEvent.length]`, _sameStartTimeEvent.length);
+
       // check _sameStartTimeEvent against dupes
       if(_sameStartTimeEvent.length > 0) {
         _sameStartTimeEvent = await _sameStartTimeEvent.filter(item => !dupesRowsSorted.includes(item.updateInfo.index));
+      } else {
+        // console.log(`[_sameStartTimeEvent.length]\t\thowdy`);
       }
+
 
       /*
       console.log(`[_newEvents]`, _newEvents);
@@ -226,24 +235,46 @@ module.exports = {
       console.log(`[_checkEvent]`, _checkEvent);
       */
 
+
       let _exactMatches = [];
+
+      // console.log(`[_exactEvent.length]`, _exactEvent.length);
+
       // check exact events from diffStartTime and remove any from _diffStartTimeEvent (cause if the event is exact... it isnt going to be added again)
       if(_exactEvent.length > 0) {
         await _exactEvent.map(async (exactEvent) => {
           // check against _diffStartTimeEvent array
           await _diffStartTimeEvent.map(async (diffStartTimeEvent) => {
             if(_.isEqual(exactEvent, diffStartTimeEvent)) {
-              // console.log('exact match');
+              // console.log('exact match', exactEvent);
               await _exactMatches.push(exactEvent);
+            } else if((_.isEqual(exactEvent.start, diffStartTimeEvent.start))
+                    && (exactEvent.action === 'VOD') && (diffStartTimeEvent.action === 'VOD')
+                    && (_.isEqual(exactEvent.line1, diffStartTimeEvent.line1))
+                    && (_.isEqual(exactEvent.line2, diffStartTimeEvent.line2))
+                    && (_.isEqual(exactEvent.duration, diffStartTimeEvent.duration))) {
+              // console.log('hellllllo');
+              // console.log(`diffStartTimeEvent`, diffStartTimeEvent);
+              // console.log(`[diffStartTimeEvent]`, diffStartTimeEvent);
+              // console.log(`[exactEvent]`, exactEvent);
+
             } else {
               // console.log('something else');
             }
           })
         });
+
+        // console.log(`[_exactMatches] 2222222`, _exactMatches);
+
         // remove exactMatches from _diffStartTimeEvent array
         _diffStartTimeEvent = await _diffStartTimeEvent.filter(item => !_exactMatches.includes(item)); // replaces array with only entries that are different (and dont have an exact match already)
 
+        // console.log(`[_diffStartTimeEvent] 2222222`, _diffStartTimeEvent);
+
         let removeTheseFromDiffArray = [];
+
+        // console.log(`[_sameStartTimeEvent.length]`, _sameStartTimeEvent.length);
+
         // remove diffStartTime from sameStartTimeEvent array
         if(_sameStartTimeEvent.length > 0) {
           await _sameStartTimeEvent.map(async (sameStartTimeEvent) => {
@@ -254,39 +285,52 @@ module.exports = {
             });
           });
           _diffStartTimeEvent = await _diffStartTimeEvent.filter(item => !removeTheseFromDiffArray.includes(item)); // removes events that are in _sameStartTimeEvent (updating)
+        } else {
+          // console.log(`[_sameStartTimeEvent.length]\t\thowdy`);
         }
+      } else {
+        // console.log(`[_exactEvent.length]\t\thowdy`);
       }
 
       let _eventExists = [];
       let deleteExistingEvents = [];
+
+      // console.log(`[_checkEvent.length]`, _checkEvent.length);
+      // console.log(`[_checkEvent]`, _checkEvent);
+
       if(_checkEvent.length > 0) {
         await _checkEvent.map(async (checkEvent) => {
           // check against each array?
           await _newEvents.map(async (newEvent) => {
             let checkStartTime = (newEvent.start.dateTime + ' ' + newEvent.start.timeZone === checkEvent.start);
             let checkEndTime = (newEvent.end.dateTime + ' ' + newEvent.end.timeZone === checkEvent.end);
-            let checkAction = (checkEvent.actionSource.split(' ').includes(newEvent.action));
-            let checkSource = (checkEvent.actionSource.split(' ').includes(newEvent.source) || (newEvent.action === 'DEMO' && checkEvent.actionSource === 'DEMO'));
+            let checkAction = (checkEvent.action === newEvent.action);
             let checkLine1 = (newEvent.line1.replace(/live:/gi, '').trim() === checkEvent.line1);
             let checkLine2 = (newEvent.line2 === checkEvent.line2);
+
             // if all fields exist - event already exists on calendar & no updates needed
-            if(checkStartTime && checkEndTime && checkAction && checkSource && checkLine1 && checkLine2) {
+            if(checkStartTime && checkEndTime && checkAction && checkLine1 && checkLine2) {
               // console.log('exact match');
               await _eventExists.push({
                 eventId: checkEvent.id,
                 eventDetails: newEvent
               });
+            } else {
+              /*
+              console.log('you are here now..');
+              console.log(`checkEvent`, checkEvent.action);
+              console.log(`newEvent`, newEvent.action);
+              */
             }
           });
           await _exactEvent.map(async (exactEvent) => {
             let checkStartTime = (exactEvent.start.dateTime + ' ' + exactEvent.start.timeZone === checkEvent.start);
             let checkEndTime = (exactEvent.end.dateTime + ' ' + exactEvent.end.timeZone === checkEvent.end);
-            let checkAction = (checkEvent.actionSource.split(' ').includes(exactEvent.action));
-            let checkSource = (checkEvent.actionSource.split(' ').includes(exactEvent.source) || (exactEvent.action === 'DEMO' && checkEvent.actionSource === 'DEMO'));
+            let checkAction = (checkEvent.action === exactEvent.action);
             let checkLine1 = (exactEvent.line1.replace(/live:/gi, '').trim() === checkEvent.line1);
             let checkLine2 = (exactEvent.line2 === checkEvent.line2);
             // if all fields exist - event already exists on calendar & no updates needed
-            if(checkStartTime && checkEndTime && checkAction && checkSource && checkLine1 && checkLine2) {
+            if(checkStartTime && checkEndTime && checkAction && checkLine1 && checkLine2) {
               // console.log('exact match');
               await _eventExists.push({
                 eventId: checkEvent.id,
@@ -297,12 +341,11 @@ module.exports = {
           await _diffStartTimeEvent.map(async (diffStartTimeEvent) => {
             let checkStartTime = (diffStartTimeEvent.start.dateTime + ' ' + diffStartTimeEvent.start.timeZone === checkEvent.start);
             let checkEndTime = (diffStartTimeEvent.end.dateTime + ' ' + diffStartTimeEvent.end.timeZone === checkEvent.end);
-            let checkAction = (checkEvent.actionSource.split(' ').includes(diffStartTimeEvent.action));
-            let checkSource = (checkEvent.actionSource.split(' ').includes(diffStartTimeEvent.source) || (diffStartTimeEvent.action === 'DEMO' && checkEvent.actionSource === 'DEMO'));
+            let checkAction = (checkEvent.action === diffStartTimeEvent.action);
             let checkLine1 = (diffStartTimeEvent.line1.replace(/live:/gi, '').trim() === checkEvent.line1);
             let checkLine2 = (diffStartTimeEvent.line2 === checkEvent.line2);
             // if all fields exist - event already exists on calendar & no updates needed
-            if(checkStartTime && checkEndTime && checkAction && checkSource && checkLine1 && checkLine2) {
+            if(checkStartTime && checkEndTime && checkAction && checkLine1 && checkLine2) {
               // console.log('exact match');
               await _eventExists.push({
                 eventId: checkEvent.id,
@@ -313,13 +356,11 @@ module.exports = {
           await _other.map(async (otherEvent) => {
             let checkStartTime = (otherEvent.start.dateTime + ' ' + otherEvent.start.timeZone === checkEvent.start);
             let checkEndTime = (otherEvent.end.dateTime + ' ' + otherEvent.end.timeZone === checkEvent.end);
-            let checkAction = (checkEvent.actionSource.split(' ').includes(otherEvent.action));
-            let checkSource = (checkEvent.actionSource.split(' ').includes(otherEvent.source) || (otherEvent.action === 'DEMO' && checkEvent.actionSource === 'DEMO'));
+            let checkAction = (checkEvent.action === otherEvent.action);
             let checkLine1 = (otherEvent.line1.replace(/live:/gi, '').trim() === checkEvent.line1);
             let checkLine2 = (otherEvent.line2 === checkEvent.line2);
             // if all fields exist - event already exists on calendar & no updates needed
-            if(checkStartTime && checkEndTime && checkAction && checkSource && checkLine1 && checkLine2) {
-              // console.log('exact match');
+            if(checkStartTime && checkEndTime && checkAction && checkLine1 && checkLine2) {
               await _eventExists.push({
                 eventId: checkEvent.id,
                 eventDetails: otherEvent
@@ -334,6 +375,9 @@ module.exports = {
 
       let mightDeleteTheseEvents = [];
       let _eventExistsIds = [];
+
+      // console.log(`[_eventExists.length]`, _eventExists.length);
+
       if(_eventExists.length > 0) {
         await _eventExists.map(async (eventExists) => await _eventExistsIds.push(eventExists.eventId));
         await existingCalendarEvents.filter(async (existingEvent) => {
@@ -350,7 +394,11 @@ module.exports = {
       mightDeleteTheseEvents = await [...new Set(mightDeleteTheseEvents)];
       let deleteTheseEvents = await mightDeleteTheseEvents.filter(item => !_eventExistsIds.includes(item));
 
+
       let dontDeleteEvents = [];
+
+      // console.log(`[_sameStartTimeEvent.length]`, _sameStartTimeEvent.length);
+
       // dont delete any that are in the update array
       if(_sameStartTimeEvent.length > 0) {
         await _sameStartTimeEvent.map(async (sameStartTimeEvent) => {
@@ -361,7 +409,10 @@ module.exports = {
           });
         });
         deleteTheseEvents = await deleteTheseEvents.filter(item => !dontDeleteEvents.includes(item));
+      } else {
+        // console.log(`[_sameStartTimeEvent.length]\t\thowdy`);
       }
+
 
       var insertArray = await _diffStartTimeEvent.concat(_newEvents); // these should be brand new entries
       var updateArray = _sameStartTimeEvent; // these should be events that need updating
@@ -370,6 +421,10 @@ module.exports = {
       // console.log(`[insertArray]`, insertArray);
       // console.log(`[updateArray]`, updateArray);
       // console.log(`[removeArray]`, removeArray);
+
+      // console.log(`[insertArray.length]`, insertArray.length);
+      // console.log(`[updateArray.length]`, updateArray.length);
+      // console.log(`[removeArray.length]`, removeArray.length);
 
       await insert(auth, insertArray); // send new events to insert.js
       await update(auth, updateArray); // send update events to update.js

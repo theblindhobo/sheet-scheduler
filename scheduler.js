@@ -65,6 +65,11 @@ const wsCloseListener = (event) => {
   ws.on('close', wsCloseListener);
 };
 
+require('./functions/onOffWebhook.js').onOffWebhook();
+// check if twitch online every minute
+setInterval(() => {
+  require('./functions/onOffWebhook.js').onOffWebhook();
+}, 60000);
 
 
 // starts app
