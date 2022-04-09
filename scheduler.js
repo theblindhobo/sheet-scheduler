@@ -3,6 +3,8 @@ const logger = require('./functions/logger/logger.js');
 const { google } = require('googleapis');
 const { authorize, getNewToken } = require('./functions/authorize.js');
 
+const checkIfOnline = require('./functions/onOffWebhook.js').onOffWebhook;
+
 const refreshSheetInSecs = 10; // Refreshes sheet information every x seconds
 
 const PORT_NUMBER = '3124';
@@ -65,11 +67,12 @@ const wsCloseListener = (event) => {
   ws.on('close', wsCloseListener);
 };
 
-require('./functions/onOffWebhook.js').onOffWebhook();
-// check if twitch online every minute
+
+checkIfOnline();
+// check if twitch online every 20s
 setInterval(() => {
-  require('./functions/onOffWebhook.js').onOffWebhook();
-}, 60000);
+  checkIfOnline();
+}, 20000);
 
 
 // starts app

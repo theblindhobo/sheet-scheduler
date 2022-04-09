@@ -19,6 +19,8 @@ const {
   writeStatusScheduled, cleanupStatus,
   sendTitle, writeNowDatetime } = require('./functions.js');
 
+const twitchSetTitle = require('./twitch/setTitle.js').setTitle; // auto set stream title when event gets triggered
+
 
 
 let nowIndex; // 'NOW'
@@ -52,14 +54,136 @@ async function notifyUser(err) {
   }
 
 }
-/*
-async function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-*/
+
 
 let prevScheduledJobCount; // for reducing duplicate logs to file
 let prevRows; // for checking to send to calendar
+
+
+// !schedule.txt
+let prevFinalContent; // !schedule.txt
+async function writeSchedule(schedule) {
+  var sortedSchedule = schedule.sort(function(a,b) {
+    return Date.parse(a[2])-Date.parse(b[2]);
+  });
+  sortedSchedule = sortedSchedule.slice(0, 5);
+  let scheduleLog = [];
+  await sortedSchedule.map(async (sortedRow) => {
+    var sortedColumn = {
+      index: (sortedRow[0]) ? sortedRow[0] : '',
+      status: (sortedRow[1]) ? sortedRow[1] : '',
+      datetime: (sortedRow[2]) ? sortedRow[2] : '',
+      timezone: (sortedRow[3] == defaultTimezone) ? sortedRow[3] : defaultTimezone,
+      action: (sortedRow[4]) ? sortedRow[4] : '',
+      source: (sortedRow[5]) ? sortedRow[5] : '',
+      line1: (sortedRow[6]) ? sortedRow[6] : '',
+      line2: (sortedRow[7]) ? sortedRow[7] : '',
+    };
+    let sortedDate = sortedColumn.datetime + ' ' + sortedColumn.timezone;
+    if(sortedColumn.action != undefined && sortedColumn.action !== '') {
+      sortedColumn.timezone = (sortedColumn.timezone == defaultTimezone) ? sortedColumn.timezone : defaultTimezone;
+      switch(sortedColumn.action) {
+        case 'DEMO':
+          // push datetime and 'Demoscene' to log array
+          scheduleLog.push([sortedDate, `Demoscene`]);
+          break;
+        case 'VOD':
+          // push datetime and ''
+          scheduleLog.push([sortedDate, (sortedColumn.line1 != undefined && sortedColumn.line1 !== '') ? sortedColumn.line1.replace(/\[![^\]]*\]/g, '').trim().replace(/  +/g, ' ') : `VOD`]);
+          break;
+        case 'LIVE':
+          // push datetime and remove 'LIVE:' from line1, then push formatted line1 to log array
+          if(sortedColumn.line1 != undefined && sortedColumn.line1 !== '') {
+            scheduleLog.push([sortedDate, sortedColumn.line1.replace(/\[![^\]]*\]/g, '').trim().replace(/live:/gi, '').trim().replace(/  +/g, ' ')]); // replaces any [!xxxx] with '', and replaces LIVE: with ''
+          } else {
+            scheduleLog.push([sortedDate, `LIVE`]);
+          }
+          break;
+        default:
+          if(sortedColumn.line1 != undefined && sortedColumn.line1 !== '') {
+            scheduleLog.push([sortedDate, sortedColumn.line1]);
+          }
+      }
+    }
+  });
+  let finalScheduleLog = [];
+  if(scheduleLog.length > 0) {
+    let prevDate;
+    let tz = '';
+
+    await scheduleLog.map(async (scheduleEntry) => {
+      let schDate = scheduleEntry[0];
+      let schLine1 = scheduleEntry[1];
+      if(!isNaN(Date.parse(schDate))) {
+        let nowDateEST = (new Date()).toLocaleString('en-US', {
+          timeZone: 'America/New_York',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+         }).split(',')[0];
+        const dEST = new Intl.DateTimeFormat(undefined, {
+          timeZone: 'America/New_York',
+          timeZoneName: 'short',
+          hourCycle: 'h24',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          weekday: 'short',
+          hour: '2-digit',
+          minute: '2-digit'
+        }).format(Date.parse(schDate));
+        switch(dEST.split(',')[2].trim().split(' ')[1]) {
+          case 'GMT+9':
+            tz = `(JST) `;
+            break;
+          default:
+            tz = `(${dEST.split(',')[2].trim().split(' ')[1]}) `;
+        }
+        let currDate = dEST.split(',')[1].trim();
+        let hour = dEST.split(',')[2].trim().split(' ')[0].trim().replace(':', '');
+        hour = (hour.substring(0,2) == '24') ? hour.replace(/^.{2}/g, '00') : hour;
+        // if scheduled job is on same day, only write date once to log
+        if(prevDate == currDate) {
+          finalScheduleLog.push(' ' + hour + ': ' + schLine1)
+        } else {
+          let dayName = dEST.split(',')[0].trim();
+          let monthDay = new Date(dEST.split(',')[1].trim()).toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+          if(currDate === nowDateEST) {
+            // same date as today, write 'Today' instead
+            finalScheduleLog.push(`| TODAY - ${dayName} ${monthDay} - ${hour}: ${schLine1}`);
+          } else {
+            finalScheduleLog.push(`| ${dayName} ${monthDay} - ${hour}: ${schLine1}`);
+          }
+          prevDate = currDate;
+        }
+      }
+    })
+
+
+
+    // write to schedule.txt
+    try {
+      if(finalScheduleLog.length > 0) {
+        let scheduleContent;
+        if(finalScheduleLog[0].includes(`${multiLinedVariable} `)) {
+          scheduleContent = ((tz !== '') ? tz : '') + `${multiLinedVariable} ` + finalScheduleLog.join(' |').slice(2).replaceAll(`${multiLinedVariable} `, '');
+        } else {
+          scheduleContent = ((tz !== '') ? tz : '') + finalScheduleLog.join(' |').slice(2);
+        }
+        var finalContent = await scheduleContent.replaceAll('||', konceptSpacerEmote);
+        // check if same or different
+        if(finalContent !== prevFinalContent) {
+          prevFinalContent = finalContent;
+          fs.writeFileSync('schedule.txt', finalContent); // write to file on changes to schedule (next 5 events)
+        }
+      }
+    } catch(err) {
+      logger.log(`[LOGGER] Could not write schedule to text file.`);
+      console.log(`\x1b[33m%s\x1b[0m`, `[LOGGER]`, `Could not write schedule to text file.`);
+    }
+  }
+}
+
 
 let prevDupe = [];
 
@@ -121,6 +245,16 @@ module.exports = {
               line2: (row[7]) ? row[7] : '',
             }
             // row[3] is now twitchID
+
+            //      ~~~ I D E A ~~~
+            // idea: what if we logged the highest number of viewers recorded for whoever is in row[3]
+            // check that the twitchID stays the same during refreshes, and then check viewers against previous viewers
+            // if that number is higher, keep that number, otherwise keep the previous number.
+            //
+            // if the twitchID changes, store the previous number viewer count as that previous twitchID
+            // then reset everything fresh for new twitchID
+            //
+            // if '' dont bother storing anything
 
             if(column.datetime !== '' && !isNaN(Date.parse(column.datetime))) {
               let tempDate = (new Date(Date.parse(column.datetime + ' ' + column.timezone)));
@@ -299,6 +433,9 @@ module.exports = {
                       // schedule job
                       var j = schedule.scheduleJob(`${timestamp}`, date, async function() {
 
+                        // send column info to setTitle.js
+                        await twitchSetTitle(column);
+
                         if(column.datetime == 'NOW') {
                           column.datetime = (date.getUTCMonth()+1) + '/' + date.getUTCDate() + '/' + date.getUTCFullYear() + ' ' + date.getUTCHours() + ':' + date.getUTCMinutes() + ':' + date.getUTCSeconds();
                           writeNowDatetime(sheets, rows.length, nowIndex, column.datetime, date);
@@ -374,6 +511,7 @@ module.exports = {
                           console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `\n[SCHEDULER]`, `\t Successfully logged to file as: ${content}  `, `  ${column.datetime} ${column.timezone}\n`);
                         });
                         await writeStatusDone(sheets, column.index);
+
                       });
 
 
@@ -483,120 +621,9 @@ module.exports = {
         }
 
         // !schedule
-        var sortedSchedule = currSchedule.sort(function(a,b) {
-          return Date.parse(a[2])-Date.parse(b[2]);
-        });
-        sortedSchedule = sortedSchedule.slice(0, 5);
-        let scheduleLog = [];
-        await sortedSchedule.map(async (sortedRow) => {
-          var sortedColumn = {
-            index: (sortedRow[0]) ? sortedRow[0] : '',
-            status: (sortedRow[1]) ? sortedRow[1] : '',
-            datetime: (sortedRow[2]) ? sortedRow[2] : '',
-            timezone: (sortedRow[3] == defaultTimezone) ? sortedRow[3] : defaultTimezone,
-            action: (sortedRow[4]) ? sortedRow[4] : '',
-            source: (sortedRow[5]) ? sortedRow[5] : '',
-            line1: (sortedRow[6]) ? sortedRow[6] : '',
-            line2: (sortedRow[7]) ? sortedRow[7] : '',
-          };
-          let sortedDate = sortedColumn.datetime + ' ' + sortedColumn.timezone;
-          if(sortedColumn.action != undefined && sortedColumn.action !== '') {
-            sortedColumn.timezone = (sortedColumn.timezone == defaultTimezone) ? sortedColumn.timezone : defaultTimezone;
-            switch(sortedColumn.action) {
-              case 'DEMO':
-                // push datetime and 'Demoscene' to log array
-                scheduleLog.push([sortedDate, `Demoscene`]);
-                break;
-              case 'VOD':
-                // push datetime and ''
-                scheduleLog.push([sortedDate, (sortedColumn.line1 != undefined && sortedColumn.line1 !== '') ? sortedColumn.line1.replace(/\[![^\]]*\]/g, '').trim().replace(/  +/g, ' ') : `VOD`]);
-                break;
-              case 'LIVE':
-                // push datetime and remove 'LIVE:' from line1, then push formatted line1 to log array
-                if(sortedColumn.line1 != undefined && sortedColumn.line1 !== '') {
-                  scheduleLog.push([sortedDate, sortedColumn.line1.replace(/\[![^\]]*\]/g, '').trim().replace(/live:/gi, '').trim().replace(/  +/g, ' ')]); // replaces any [!xxxx] with '', and replaces LIVE: with ''
-                } else {
-                  scheduleLog.push([sortedDate, `LIVE`]);
-                }
-                break;
-              default:
-                if(sortedColumn.line1 != undefined && sortedColumn.line1 !== '') {
-                  scheduleLog.push([sortedDate, sortedColumn.line1]);
-                }
-            }
-          }
-        });
-        let finalScheduleLog = [];
-        if(scheduleLog.length > 0) {
-          let prevDate;
-          let tz = '';
-
-          await scheduleLog.map(async (scheduleEntry) => {
-            let schDate = scheduleEntry[0];
-            let schLine1 = scheduleEntry[1];
-            if(!isNaN(Date.parse(schDate))) {
-              let nowDateEST = (new Date()).toLocaleString('en-US', {
-                timeZone: 'America/New_York',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit'
-               }).split(',')[0];
-              const dEST = new Intl.DateTimeFormat(undefined, {
-                timeZone: 'America/New_York',
-                timeZoneName: 'short',
-                hourCycle: 'h24',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                weekday: 'short',
-                hour: '2-digit',
-                minute: '2-digit'
-              }).format(Date.parse(schDate));
-              switch(dEST.split(',')[2].trim().split(' ')[1]) {
-                case 'GMT+9':
-                  tz = `(JST) `;
-                  break;
-                default:
-                  tz = `(${dEST.split(',')[2].trim().split(' ')[1]}) `;
-              }
-              let currDate = dEST.split(',')[1].trim();
-              let hour = dEST.split(',')[2].trim().split(' ')[0].trim().replace(':', '');
-              hour = (hour.substring(0,2) == '24') ? hour.replace(/^.{2}/g, '00') : hour;
-              // if scheduled job is on same day, only write date once to log
-              if(prevDate == currDate) {
-                finalScheduleLog.push(' ' + hour + ': ' + schLine1)
-              } else {
-                let dayName = dEST.split(',')[0].trim();
-                let monthDay = new Date(dEST.split(',')[1].trim()).toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
-                if(currDate === nowDateEST) {
-                  // same date as today, write 'Today' instead
-                  finalScheduleLog.push(`| TODAY - ${dayName} ${monthDay} - ${hour}: ${schLine1}`);
-                } else {
-                  finalScheduleLog.push(`| ${dayName} ${monthDay} - ${hour}: ${schLine1}`);
-                }
-                prevDate = currDate;
-              }
-            }
-          })
+        await writeSchedule(currSchedule);
 
 
-
-          // write to schedule.txt
-          try {
-            if(finalScheduleLog.length > 0) {
-              let scheduleContent;
-              if(finalScheduleLog[0].includes(`${multiLinedVariable} `)) {
-                scheduleContent = ((tz !== '') ? tz : '') + `${multiLinedVariable} ` + finalScheduleLog.join(' |').slice(2).replaceAll(`${multiLinedVariable} `, '');
-              } else {
-                scheduleContent = ((tz !== '') ? tz : '') + finalScheduleLog.join(' |').slice(2);
-              }
-              fs.writeFileSync('schedule.txt', scheduleContent.replaceAll('||', konceptSpacerEmote));
-            }
-          } catch(err) {
-            logger.log(`[LOGGER] Could not write schedule to text file.`);
-            console.log(`\x1b[33m%s\x1b[0m`, `[LOGGER]`, `Could not write schedule to text file.`);
-          }
-        }
       }
 
     });
