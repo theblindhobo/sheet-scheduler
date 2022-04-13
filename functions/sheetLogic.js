@@ -17,7 +17,8 @@ const {
   toTimestamp, clearDisplayDone,
   sendDisplay, writeStatusDone,
   writeStatusScheduled, cleanupStatus,
-  sendTitle, writeNowDatetime } = require('./functions.js');
+  sendTitle, writeNowDatetime,
+  switchWebhookAlert } = require('./functions.js');
 
 const webhook = require('./webhook.js').webhook; // event announcements
 var minsBeforeCacheStreamPreview = 2; // wait 2 mins before caching stream preview then post announcement
@@ -187,6 +188,8 @@ async function writeSchedule(schedule) {
   }
 }
 
+var webhookAlertSwitch = {};
+
 
 let prevDupe = [];
 
@@ -251,8 +254,10 @@ module.exports = {
             };
             // row[3] is now twitchID
 
+            webhookAlertSwitch.index = 3;
+
             // just for the alert button ON/OFF for onOffWebhook
-            if(column.index == 3) {
+            if(column.index == webhookAlertSwitch.index) {
               // check if prev value is the same, if not.. then write to json file
               if(column.status !== undefined || column.status !== '') {
                 var onOffOptions = ['ON','OFF'];
@@ -337,7 +342,8 @@ module.exports = {
                   if((toTimestamp(`${column.datetime} ${defaultTimezone}`)) * 1000 < Date.parse(new Date)) { // datetime is in the past
                     // date in past
                   } else {
-                    await cleanupStatus(sheets, column.index); // date not in past
+                    // shouldnt need this function here at all
+                    // await cleanupStatus(sheets, column.index, 'said done 3'); // date not in past
                   }
                 }
               } else {
@@ -448,7 +454,9 @@ module.exports = {
                       if(column.status !== 'SCHEDULED' && column.datetime !== '' && column.action !== '' && !(timestamp * 1000 < now)) {
                         // check if not dupe start time (keep highest index)
                         // push to array and check outside of the 'map' function
-                        await writeStatusScheduled(sheets, column.index);
+                        if(column.datetime !== 'NOW') {
+                          await writeStatusScheduled(sheets, column.index);
+                        }
                       }
 
 
@@ -458,11 +466,6 @@ module.exports = {
 
                         // send column info to setTitle.js
                         await twitchSetTitle(column);
-
-                        if(column.datetime == 'NOW') {
-                          column.datetime = (date.getUTCMonth()+1) + '/' + date.getUTCDate() + '/' + date.getUTCFullYear() + ' ' + date.getUTCHours() + ':' + date.getUTCMinutes() + ':' + date.getUTCSeconds();
-                          writeNowDatetime(sheets, rows.length, nowIndex, column.datetime, date);
-                        }
 
                         if(column.action == 'LIVE' || column.action == 'VOD') {
                           let socket = client ? client : 'closed';
@@ -488,6 +491,24 @@ module.exports = {
                               console.log(`\x1b[35m%s\x1b[0m`, `\n[WEBSOCKET]`, `Couldn't send titles to websocket. Socket is closed, closing, or reconnecting.`);
                             }
                           }
+                        }
+
+                        var onlineOffline = ['ONLINE', 'OFFLINE'];
+                        if(onlineOffline.includes(column.source)) {
+                          switch(column.source) {
+                            case 'ONLINE':
+                              // turn onOffWebhook Alert to 'ON'
+                              await switchWebhookAlert(sheets, webhookAlertSwitch.index, 'ON');
+                              break;
+                            case 'OFFLINE':
+                              // turn onOffWebhook Alert to 'OFF'
+                              await switchWebhookAlert(sheets, webhookAlertSwitch.index, 'OFF');
+                              break;
+                            default:
+                              //
+                              logger.log(`[SCHEDULER] ONLINE / OFFLINE`);
+                              console.log(`\x1b[31m%s\x1b[0m`, `[SCHEDULER]`, `ONLINE / OFFLINE`);
+                          };
                         }
 
                         // write to title file
@@ -530,6 +551,11 @@ module.exports = {
                           console.log(`\x1b[31m%s\x1b[0m`, `[SCHEDULER]`, err);
                         }
 
+                        if(column.datetime == 'NOW') {
+                          column.datetime = (date.getUTCMonth()+1) + '/' + date.getUTCDate() + '/' + date.getUTCFullYear() + ' ' + date.getUTCHours() + ':' + date.getUTCMinutes() + ':' + date.getUTCSeconds();
+                          await writeNowDatetime(sheets, rows.length, nowIndex, column.datetime, date);
+                        }
+
                         await writeStatusDone(sheets, column.index);
 
                         // webhook announcements - leave last so it doesn't hold up any other code
@@ -561,7 +587,9 @@ module.exports = {
                 if(column.datetime != undefined || column.datetime !== '') {
                   if(!jobs.includes(toTimestamp(`${column.datetime} ${defaultTimezone}`))) {
                     // how to check if theres multiple exact times
-                    await cleanupStatus(sheets, column.index);
+                    if(column.datetime !== 'NOW') {
+                      await cleanupStatus(sheets, column.index);
+                    }
                   } else {
                     if(!isNaN(Date.parse(column.datetime))) {
                       await currSchedule.push(Object.values(column));
@@ -576,7 +604,11 @@ module.exports = {
                     if((toTimestamp(`${column.datetime} ${defaultTimezone}`)) * 1000 < Date.parse(new Date)) { // datetime is in the past
                       // date in past
                     } else {
-                      await cleanupStatus(sheets, column.index); // date not in past
+                      // shouldnt need this function here at all
+                      if(column.datetime === 'NOW') {
+                        await cleanupStatus(sheets, column.index);
+                      }
+                      // await cleanupStatus(sheets, column.index, 'said done'); // date not in past
                     }
                   }
                 } else {

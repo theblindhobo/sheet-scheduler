@@ -15,7 +15,7 @@ var environmentals = {
   notifyWebhookURL: process.env.NOTIFY_WEBHOOK_URL
 };
 
-let state = 'TESTING CIRCUIT';
+let state = 'TESTING';
 switch(state) {
   case 'LIVE':
     environmentals.twitchClientId = process.env.TWITCH_KONCIERGE_CLIENT_ID;
