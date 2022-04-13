@@ -117,7 +117,7 @@ module.exports = {
                   // checks duration is a number
                   if(!isNaN(parseFloat(column.duration))) {
                     // checks duration is under the max allowed time
-                    if(!(parseFloat(column.duration) >= longestDuration)) {
+                    if(!(parseFloat(column.duration) > longestDuration)) {
                       // splits duration into array: [ hours, minutes ]
                       var splitHourMin = [
                           (parseFloat(column.duration) > 0) ? Math.floor(parseFloat(column.duration)) : Math.ceil(parseFloat(column.duration)),
