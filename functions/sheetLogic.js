@@ -19,6 +19,9 @@ const {
   writeStatusScheduled, cleanupStatus,
   sendTitle, writeNowDatetime } = require('./functions.js');
 
+const webhook = require('./webhook.js').webhook; // event announcements
+var minsBeforeCacheStreamPreview = 2; // wait 2 mins before caching stream preview then post announcement
+
 const twitchSetTitle = require('./twitch/setTitle.js').setTitle; // auto set stream title when event gets triggered
 
 
@@ -187,6 +190,8 @@ async function writeSchedule(schedule) {
 
 let prevDupe = [];
 
+let prevOnOffStatus; // writing to json file
+
 module.exports = {
   sheetLogic: (google, auth, client) => {
     let jobs = []; // only used to compare lists
@@ -243,8 +248,26 @@ module.exports = {
               source: (row[5]) ? row[5] : '',
               line1: (row[6]) ? row[6] : '',
               line2: (row[7]) ? row[7] : '',
-            }
+            };
             // row[3] is now twitchID
+
+            // just for the alert button ON/OFF for onOffWebhook
+            if(column.index == 3) {
+              // check if prev value is the same, if not.. then write to json file
+              if(column.status !== undefined || column.status !== '') {
+                var onOffOptions = ['ON','OFF'];
+                if(onOffOptions.includes(column.status) && column.status !== prevOnOffStatus) {
+                  prevOnOffStatus = column.status;
+                  try {
+                    fs.writeFileSync('./functions/json/onOff.json', JSON.stringify({
+                      "status": column.status
+                    }))
+                  } catch(error) {
+                    console.log(`[ON/OFF] Catch Error`);
+                  }
+                }
+              }
+            }
 
             //      ~~~ I D E A ~~~
             // idea: what if we logged the highest number of viewers recorded for whoever is in row[3]
@@ -476,15 +499,6 @@ module.exports = {
                           console.log(`\x1b[33m%s\x1b[0m`, `[TITLES]`, `Could not write to title text file.`);
                         }
 
-                        try {
-                          setTimeout(() => {
-                            require('./webhook.js').webhook(column);
-                          }, 1 * 60 * 1000); // 1 minute timeout to make sure twitch preview is of streamer
-                        } catch(err) {
-                          logger.log(`[WEBHOOK] Could not send webhook to discord.`);
-                          console.log(`\x1b[33m%s\x1b[0m`, `[WEBHOOK]`, `Could not send webhook to discord.`);
-                        }
-
                         // write to log file
                         let content;
                         switch (column.action) {
@@ -501,16 +515,31 @@ module.exports = {
                             logger.log(`[SCHEDULER] There's an error in the *content switch*.`);
                             console.log(`\x1b[31m%s\x1b[0m`, `[SCHEDULER]`, `There's an error in the *content switch*.`);
                         }
-                        fs.writeFile('log.txt', content, err => {
-                          if(err) {
-                            logger.log(`[SCHEDULER] Error in writing to log.txt for DEMO, LIVE, VOD: ${err}`);
-                            console.log(`\x1b[31m%s\x1b[0m`, `[SCHEDULER]`, err);
-                            return
-                          }
-                          logger.log(`[SCHEDULER]\tSuccessfully logged to file as: ${content} - ${column.datetime} ${column.timezone}`);
-                          console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `\n[SCHEDULER]`, `\t Successfully logged to file as: ${content}  `, `  ${column.datetime} ${column.timezone}\n`);
-                        });
+                        try {
+                          fs.writeFile('log.txt', content, err => {
+                            if(err) {
+                              logger.log(`[SCHEDULER] Error in writing to log.txt for DEMO, LIVE, VOD: ${err}`);
+                              console.log(`\x1b[31m%s\x1b[0m`, `[SCHEDULER]`, err);
+                              return
+                            }
+                            logger.log(`[SCHEDULER]\tSuccessfully logged to file as: ${content} - ${column.datetime} ${column.timezone}`);
+                            console.log(`\x1b[36m%s\x1b[0m%s\x1b[33m%s\x1b[0m`, `\n[SCHEDULER]`, `\t Successfully logged to file as: ${content}  `, `  ${column.datetime} ${column.timezone}\n`);
+                          });
+                        } catch(err) {
+                          logger.log(`[SCHEDULER] Error in writing to log.txt: ${err}`);
+                          console.log(`\x1b[31m%s\x1b[0m`, `[SCHEDULER]`, err);
+                        }
+
                         await writeStatusDone(sheets, column.index);
+
+                        // webhook announcements - leave last so it doesn't hold up any other code
+                        try {
+                          await new Promise(resolve => setTimeout(resolve, minsBeforeCacheStreamPreview * 60 * 1000)); // 2 minute timeout to make sure twitch preview is of streamer
+                          await webhook(column);
+                        } catch(err) {
+                          logger.log(`[WEBHOOK] Could not send webhook to discord.`);
+                          console.log(`\x1b[33m%s\x1b[0m`, `[WEBHOOK]`, `Could not send webhook to discord.`);
+                        }
 
                       });
 

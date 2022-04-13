@@ -5,8 +5,8 @@ dotenv.config();
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 
-var konceptTwitchId = '105287570'; // koncept
-// var konceptTwitchId = '179603603'; // anth
+// var konceptTwitchId = '105287570'; // koncept
+var konceptTwitchId = '179603603'; // anth
 
 
 var environmentals = {
@@ -92,7 +92,6 @@ async function sendWebhook() {
   }
 }
 
-
 async function sendWebhookInvalidOAuth() {
   var iconURL = 'https://i.imgur.com/BpBtNtI.png';
   var kitschId = environmentals.notifyDiscordUser;
@@ -122,90 +121,102 @@ async function sendWebhookInvalidOAuth() {
   }
 }
 
+
+
 // 15min cooldown on sending OAuth Webhook
 let webhookCooldown = false;
+
 
 // ping role 956391251459080263 in channel 934721294128271380
 // ping role koncept-ops in channel #koncept-ops
 module.exports = {
   onOffWebhook: async () => {
-    try {
-      fetch(`https://api.twitch.tv/helix/streams?user_id=${konceptTwitchId}`, {
-          headers: {
-            'Client-Id': environmentals.twitchClientId,
-            'Authorization': `Bearer ${environmentals.twitchOAuth}`
-          }
-        }).then(async response => {
+    const fs = require('fs');
+    let rawdata = await fs.readFileSync('./functions/json/onOff.json');
+    let status = await JSON.parse(rawdata);
+    // console.log(`[status]`, status.status);
 
-            let responseObj = {};
+    if(status.status === 'ON') {
+      // send webhooks
+      try {
+        fetch(`https://api.twitch.tv/helix/streams?user_id=${konceptTwitchId}`, {
+            headers: {
+              'Client-Id': environmentals.twitchClientId,
+              'Authorization': `Bearer ${environmentals.twitchOAuth}`
+            }
+          }).then(async response => {
 
-            if(response.status === 200) {
-              return response.json()
-            } else if(response.status === 401) {
-              responseObj = await response.json().then(data=>data);
-              if(responseObj.message === 'Invalid OAuth token') {
-                if(!webhookCooldown) {
-                  webhookCooldown = true
-                  // send webhook telling to update OAuth token in .env file
-                  await sendWebhookInvalidOAuth();
-                  setTimeout(() => {
-                    webhookCooldown = false;
-                  }, remindAfterMinutes * 60 * 1000);
+              let responseObj = {};
+
+              if(response.status === 200) {
+                return response.json()
+              } else if(response.status === 401) {
+                responseObj = await response.json().then(data=>data);
+                if(responseObj.message === 'Invalid OAuth token') {
+                  if(!webhookCooldown) {
+                    webhookCooldown = true
+                    // send webhook telling to update OAuth token in .env file
+                    await sendWebhookInvalidOAuth();
+                    setTimeout(() => {
+                      webhookCooldown = false;
+                    }, remindAfterMinutes * 60 * 1000);
+                  }
                 }
+                throw new Error(`ERROR: ${responseObj.status} ${responseObj.error} - ${responseObj.message}`);
+              } else {
+                responseObj = await response.json().then(data=>data);
+                // console.log('WHOOPS');
+                throw new Error(`ERROR: ${response} WHOOPS!`);
               }
-              throw new Error(`ERROR: ${responseObj.status} ${responseObj.error} - ${responseObj.message}`);
-            } else {
-              responseObj = await response.json().then(data=>data);
-              // console.log('WHOOPS');
-              throw new Error(`ERROR: ${response} WHOOPS!`);
-            }
-        }).then(async data => {
-            if(data.data.length == undefined || data.data.length === 0) {
-              // offline
-              // console.log('offline');
+          }).then(async data => {
+              if(data.data.length == undefined || data.data.length === 0) {
+                // offline
+                // console.log('offline');
 
-              // send webhook to #koncept-ops
-              offlineCounter++;
-              if(offlineCounter > 2) {
-                offlineCounter = 0;
-                await sendWebhook();
+                // send webhook to #koncept-ops
+                offlineCounter++;
+                if(offlineCounter > 2) {
+                  offlineCounter = 0;
+                  await sendWebhook();
+                }
+              } else if(data.data.length > 0) {
+                // online
+                // console.log('online');
+
+                var onlineData = {
+                  "id": data.data[0].id,
+                  "user_id": data.data[0].user_id,
+                  "user_login": data.data[0].user_login,
+                  "user_name": data.data[0].user_name,
+                  "game_id": data.data[0].game_id,
+                  "game_name": data.data[0].game_name,
+                  "type": data.data[0].type,
+                  "title": data.data[0].title,
+                  "viewer_count": data.data[0].viewer_count,
+                  "started_at": data.data[0].started_at,
+                  "language": data.data[0].language,
+                  "thumbnail_url": data.data[0].thumbnail_url,
+                  "tag_ids": data.data[0].tag_ids,
+                  "is_mature": data.data[0].is_mature
+                };
+
+                // await sendWebhook(); // for testing purposes
               }
-            } else if(data.data.length > 0) {
-              // online
-              // console.log('online');
-
-              var onlineData = {
-                "id": data.data[0].id,
-                "user_id": data.data[0].user_id,
-                "user_login": data.data[0].user_login,
-                "user_name": data.data[0].user_name,
-                "game_id": data.data[0].game_id,
-                "game_name": data.data[0].game_name,
-                "type": data.data[0].type,
-                "title": data.data[0].title,
-                "viewer_count": data.data[0].viewer_count,
-                "started_at": data.data[0].started_at,
-                "language": data.data[0].language,
-                "thumbnail_url": data.data[0].thumbnail_url,
-                "tag_ids": data.data[0].tag_ids,
-                "is_mature": data.data[0].is_mature
-              };
-
-              // await sendWebhook(); // for testing purposes
-            }
-        }).catch(error => {
-            if(error.toString().includes('ERROR: 401 Unauthorized - Invalid OAuth token')) {
-              logger.log(`[ONLINE CHECK] Error: Invalid OAuth token`);
-              console.log(`[ONLINE CHECK] Error: Invalid OAuth token`);
-            } else {
-              logger.log(`[ONLINE CHECK] ${error}`);
-              console.log(`[ONLINE CHECK]`, error);
-            }
-        });
-    } catch(err) {
-      logger.log(`Was not able to check online/offline status ${err}`);
-      console.log(`Was not able to check online/offline status`, err);
+          }).catch(error => {
+              if(error.toString().includes('ERROR: 401 Unauthorized - Invalid OAuth token')) {
+                logger.log(`[ONLINE CHECK] Error: Invalid OAuth token`);
+                console.log(`[ONLINE CHECK] Error: Invalid OAuth token`);
+              } else {
+                logger.log(`[ONLINE CHECK] ${error}`);
+                console.log(`[ONLINE CHECK]`, error);
+              }
+          });
+      } catch(err) {
+        logger.log(`Was not able to check online/offline status ${err}`);
+        console.log(`Was not able to check online/offline status`, err);
+      }
+    } else if(status.status === 'OFF') {
+      // off
     }
-
   }
 };

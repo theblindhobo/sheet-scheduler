@@ -13,7 +13,7 @@ const { remove } = require('./functions/remove.js');
 
 let prevRows;
 var sheetIndexStart = 5; // the row on the sheet to start looking at
-var longestDuration = 20; // in hours
+var longestDuration = 48; // in hours
 
 var actionArray = ['LIVE', 'VOD', 'DEMO'];
 var defaultTimezone = 'UTC';
