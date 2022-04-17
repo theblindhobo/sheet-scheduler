@@ -15,7 +15,7 @@ let prevRows;
 var sheetIndexStart = 5; // the row on the sheet to start looking at
 var longestDuration = 48; // in hours
 
-var actionArray = ['LIVE', 'VOD', 'DEMO'];
+var actionArray = ['LIVE', 'VOD', 'DEMO', 'OFFLINE'];
 var defaultTimezone = 'UTC';
 
 var minutesInPast = 10; // for checking 10mins in past up until future dates (to include NOW)
@@ -89,14 +89,13 @@ module.exports = {
         if(column.index >= sheetIndexStart && keepsRowsSorted.includes(column.index)) {
           // checks start time is valid date
           if(!isNaN(Date.parse(column.datetime + ' ' + column.timezone))) {
-            // check if action is LIVE, DEMO, or VOD
+            // check if action is LIVE, DEMO, VOD, or OFFLINE
             if(column.action !== '' && actionArray.includes(column.action)) {
-              if((column.action === 'LIVE' && column.source !== '') || (column.action === 'VOD' && column.source !== '') || (column.action === 'DEMO')) {
+              if((column.action === 'LIVE' && column.source !== '') || (column.action === 'VOD' && column.source !== '') || (column.action === 'DEMO') || (column.action === 'OFFLINE')) {
                 // set line1 if missing (for Cal entry)
                 switch(column.action) {
+                  case 'OFFLINE':
                   case 'LIVE':
-                    column.line1 = (column.line1 !== '') ? column.line1 : ((column.source !== '') ? `${column.action} - ${column.source}` : column.action);
-                    break;
                   case 'VOD':
                     column.line1 = (column.line1 !== '') ? column.line1 : ((column.source !== '') ? column.action : column.action);
                     break;

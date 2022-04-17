@@ -20,14 +20,15 @@ module.exports = {
           let location;
           let summary;
           switch(calEvent.action) {
+            case 'OFFLINE':
+              location = calEvent.action;
+              summary = (calEvent.line1.trim() !== '') ? calEvent.line1.trim() : `OFFLINE`;
+              break;
             case 'LIVE':
               location = calEvent.action;
               summary = calEvent.line1.replace(/live:/gi, '').trim();
               break;
             case 'VOD':
-              location = calEvent.action;
-              summary = calEvent.line1.trim();
-              break;
             case 'DEMO':
               location = calEvent.action;
               summary = calEvent.line1.trim();

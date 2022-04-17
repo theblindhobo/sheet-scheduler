@@ -68,7 +68,9 @@ async function cachePreview(twitchPreviewURL) {
 
 module.exports = {
   webhook: async (rowObj) => {
-    if(rowObj.action != 'DISPLAY' && rowObj.action != 'DEMO') {
+    var doNotAnnounce = ['DISPLAY', 'DEMO', 'ONLINE', 'OFFLINE'];
+    var actionArray = ['LIVE', 'VOD'];
+    if(actionArray.includes(rowObj.action)) {
       if(!isNaN(Date.parse(rowObj.datetime))) {
         var timestampDate = new Date();
 

@@ -28,7 +28,10 @@ const twitchSetTitle = require('./twitch/setTitle.js').setTitle; // auto set str
 
 
 let nowIndex; // 'NOW'
-var actionArray = ['DEMO', 'LIVE', 'VOD'];
+var actionArray = [
+  'DEMO', 'LIVE', 'VOD',
+  'ONLINE', 'OFFLINE'
+];
 
 let notifyUserCooldown = false;
 var notifyUserCooldownHours = 5; // will send another discord message after 5 hours when access token needs replaced
@@ -100,11 +103,18 @@ async function writeSchedule(schedule) {
           if(sortedColumn.line1 != undefined && sortedColumn.line1 !== '') {
             scheduleLog.push([sortedDate, sortedColumn.line1.replace(/\[![^\]]*\]/g, '').trim().replace(/live:/gi, '').trim().replace(/  +/g, ' ')]); // replaces any [!xxxx] with '', and replaces LIVE: with ''
           } else {
-            scheduleLog.push([sortedDate, `LIVE`]);
+            scheduleLog.push([sortedDate, sortedColumn.action]);
+          }
+          break;
+        case 'OFFLINE':
+          if(sortedColumn.line1 !== undefined && sortedColumn.line1 !== '' && sortedColumn.line1 !== ' ') {
+            scheduleLog.push([sortedDate, sortedColumn.line1]);
+          } else {
+            scheduleLog.push([sortedDate, sortedColumn.action]);
           }
           break;
         default:
-          if(sortedColumn.line1 != undefined && sortedColumn.line1 !== '') {
+          if(sortedColumn.line1 !== undefined && sortedColumn.line1 !== '') {
             scheduleLog.push([sortedDate, sortedColumn.line1]);
           }
       }
@@ -224,8 +234,14 @@ module.exports = {
           console.log(`\x1b[31m%s\x1b[33m%s\x1b[0m`, `[ACCESS TOKEN]`, `\tThe API returned an error: ${err.toString().split(':')[1].trim()}`);
           console.log(`\x1b[31m%s\x1b[33m%s\x1b[0m`, `[ACCESS TOKEN]`, `\tPlease retrieve a new access token to continue.`);
         } else {
-          logger.log(`[READ] The API returned an error: ${err}`);
-          console.log(`\x1b[33m%s\x1b[0m`, `[READ]`, ` The API returned an error: ` + err);
+          var stringErr = err.toString();
+          if(stringErr.includes('Error 502 (Server Error)') || stringErr.includes('The server encountered a temporary error and could not complete your request.')) {
+            logger.log(`[READ] The API returned an error: ERROR 502: The server encountered a temporary error and could not complete your request. Please try again in 30 seconds.`);
+            console.log(`\x1b[33m%s\x1b[0m`, `[READ]`, ` The API returned an error: ERROR 502: The server encountered a temporary error and could not complete your request. Please try again in 30 seconds.`);
+          } else {
+            logger.log(`[READ] The API returned an error: ${err}`);
+            console.log(`\x1b[33m%s\x1b[0m`, `[READ]`, ` The API returned an error: ` + err);
+          }
         }
       }
 
@@ -341,9 +357,6 @@ module.exports = {
                 if(new Date(column.datetime) instanceof Date) { // datetime is a valid date
                   if((toTimestamp(`${column.datetime} ${defaultTimezone}`)) * 1000 < Date.parse(new Date)) { // datetime is in the past
                     // date in past
-                  } else {
-                    // shouldnt need this function here at all
-                    // await cleanupStatus(sheets, column.index, 'said done 3'); // date not in past
                   }
                 }
               } else {
@@ -389,8 +402,10 @@ module.exports = {
             } else {
               let column = row;
               if((column.index >= 5 && !isNaN(new Date(column.datetime)) && actionArray.includes(column.action)) || (column.index >= 5 && column.datetime == 'NOW' && actionArray.includes(column.action))) {
-                // Checks if action LIVE, DEMO, or VOD
+                // Checks if action LIVE, DEMO, VOD, ONLINE, or OFFLINE
                 // Check DATETIME is a date or 'NOW'
+
+                // console.log(`${column.index}: `, column);
 
                 // sets nowIndex
                 if(column.datetime == 'NOW') {
@@ -432,7 +447,7 @@ module.exports = {
                     }
                   } else {
                     // check if LIVE has a URI && if VOD has a NAME
-                    if((column.action === 'LIVE' && column.source !== '') || (column.action === 'VOD' && column.source !== '') || (column.action === 'DEMO')) {
+                    if((column.action === 'LIVE' && column.source !== '') || (column.action === 'VOD' && column.source !== '') || (column.action === 'DEMO') || (column.action === 'ONLINE') || (column.action === 'OFFLINE')) {
 
                       jobs.push(timestamp);
 
@@ -467,48 +482,45 @@ module.exports = {
                         // send column info to setTitle.js
                         await twitchSetTitle(column);
 
-                        if(column.action == 'LIVE' || column.action == 'VOD') {
-                          let socket = client ? client : 'closed';
-                          if(socket == 'closed') {
-                            logger.log(`[WEBSOCKET] Couldn't send titles to websocket. Socket is closed.`);
-                            console.log(`\x1b[35m%s\x1b[0m`, `\n[WEBSOCKET]`, `Couldn't send titles to websocket. Socket is closed.`);
-                          } else {
-                            titleObj = {
-                                "event": "titles",
-                                "data": {
-                                  "action": column.action,
-                                  "source": column.source,
-                                  "name": (column.action == 'DISPLAY') ? 'Quick Display' : '',
-                                  "line1": column.line1,
-                                  "line2": column.line2
-                                }
-                            };
-
-                            if(socket.readyState == 1) {
-                              sendTitle(socket, titleObj);
+                        switch(column.action) {
+                          case 'LIVE':
+                          case 'VOD':
+                            let socket = client ? client : 'closed';
+                            if(socket == 'closed') {
+                              logger.log(`[WEBSOCKET] Couldn't send titles to websocket. Socket is closed.`);
+                              console.log(`\x1b[35m%s\x1b[0m`, `\n[WEBSOCKET]`, `Couldn't send titles to websocket. Socket is closed.`);
                             } else {
-                              logger.log(`[WEBSOCKET] Couldn't send titles to websocket. Socket is closed, closing, or reconnecting.`);
-                              console.log(`\x1b[35m%s\x1b[0m`, `\n[WEBSOCKET]`, `Couldn't send titles to websocket. Socket is closed, closing, or reconnecting.`);
-                            }
-                          }
-                        }
+                              titleObj = {
+                                  "event": "titles",
+                                  "data": {
+                                    "action": column.action,
+                                    "source": column.source,
+                                    "name": (column.action == 'DISPLAY') ? 'Quick Display' : '',
+                                    "line1": column.line1,
+                                    "line2": column.line2
+                                  }
+                              };
 
-                        var onlineOffline = ['ONLINE', 'OFFLINE'];
-                        if(onlineOffline.includes(column.source)) {
-                          switch(column.source) {
-                            case 'ONLINE':
-                              // turn onOffWebhook Alert to 'ON'
-                              await switchWebhookAlert(sheets, webhookAlertSwitch.index, 'ON');
-                              break;
-                            case 'OFFLINE':
-                              // turn onOffWebhook Alert to 'OFF'
-                              await switchWebhookAlert(sheets, webhookAlertSwitch.index, 'OFF');
-                              break;
-                            default:
-                              //
-                              logger.log(`[SCHEDULER] ONLINE / OFFLINE`);
-                              console.log(`\x1b[31m%s\x1b[0m`, `[SCHEDULER]`, `ONLINE / OFFLINE`);
-                          };
+                              if(socket.readyState == 1) {
+                                sendTitle(socket, titleObj);
+                              } else {
+                                logger.log(`[WEBSOCKET] Couldn't send titles to websocket. Socket is closed, closing, or reconnecting.`);
+                                console.log(`\x1b[35m%s\x1b[0m`, `\n[WEBSOCKET]`, `Couldn't send titles to websocket. Socket is closed, closing, or reconnecting.`);
+                              }
+                            }
+                            break;
+                          case 'ONLINE':
+                            // turn onOffWebhook Alert to 'ON'
+                            await switchWebhookAlert(sheets, webhookAlertSwitch.index, 'ON');
+                            break;
+                          case 'OFFLINE':
+                            // turn onOffWebhook Alert to 'OFF'
+                            await switchWebhookAlert(sheets, webhookAlertSwitch.index, 'OFF');
+                            break;
+                          default:
+                            //
+                            logger.log(`[SCHEDULER] ONLINE / OFFLINE`);
+                            console.log(`\x1b[31m%s\x1b[0m`, `[SCHEDULER]`, `ONLINE / OFFLINE`);
                         }
 
                         // write to title file
@@ -530,6 +542,8 @@ module.exports = {
                             content = `${column.action}:${column.source}`;
                             break;
                           case 'DEMO':
+                          case 'ONLINE':
+                          case 'OFFLINE':
                             content = `${column.action}`;
                             break;
                           default:
@@ -539,7 +553,7 @@ module.exports = {
                         try {
                           fs.writeFile('log.txt', content, err => {
                             if(err) {
-                              logger.log(`[SCHEDULER] Error in writing to log.txt for DEMO, LIVE, VOD: ${err}`);
+                              logger.log(`[SCHEDULER] Error in writing to log.txt for DEMO, LIVE, VOD, ONLINE, OFFLINE: ${err}`);
                               console.log(`\x1b[31m%s\x1b[0m`, `[SCHEDULER]`, err);
                               return
                             }
@@ -592,7 +606,9 @@ module.exports = {
                     }
                   } else {
                     if(!isNaN(Date.parse(column.datetime))) {
-                      await currSchedule.push(Object.values(column));
+                      if(actionArray.includes(column.action) && column.action !== 'ONLINE') {
+                        await currSchedule.push(Object.values(column));
+                      }
                     }
                   }
                 } else {

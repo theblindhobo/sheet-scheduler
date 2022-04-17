@@ -20,6 +20,10 @@ module.exports = {
           let location;
           let summary;
           switch(calEvent.updateInfo.action) {
+            case 'OFFLINE':
+              location = calEvent.updateInfo.action;
+              summary = (calEvent.updateInfo.line1 !== '') ? calEvent.updateInfo.line1 : `OFFLINE`;
+              break;
             case 'LIVE':
               location = calEvent.updateInfo.action;
               summary = calEvent.updateInfo.line1.replace(/live:/gi, '').trim();
