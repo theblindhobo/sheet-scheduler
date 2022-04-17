@@ -570,7 +570,10 @@ module.exports = {
                           await writeNowDatetime(sheets, rows.length, nowIndex, column.datetime, date);
                         }
 
-                        await writeStatusDone(sheets, column.index);
+                        if(column.status !== 'DONE') {
+                          await writeStatusDone(sheets, column.index);
+                        }
+
 
                         // webhook announcements - leave last so it doesn't hold up any other code
                         try {
@@ -622,7 +625,7 @@ module.exports = {
                     } else {
                       // shouldnt need this function here at all
                       if(column.datetime === 'NOW') {
-                        await cleanupStatus(sheets, column.index);
+                        // await cleanupStatus(sheets, column.index);
                       }
                       // await cleanupStatus(sheets, column.index, 'said done'); // date not in past
                     }
