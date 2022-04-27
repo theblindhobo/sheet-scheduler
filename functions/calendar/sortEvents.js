@@ -27,17 +27,47 @@ module.exports = {
     if(!_.isEqual(rows, prevRows)) {
       // grab calendar
       const calendar = google.calendar({ version: 'v3', auth });
+
+      let resultItems = [];
       const res = await calendar.events.list({
         kind: "calendar#event",
         calendarId: calendarID,
         orderBy: "startTime",
-        singleEvents: true
+        singleEvents: true,
+        maxResults: 20
       });
+      resultItems = await res.data.items;
+
+      async function nextPage(token) {
+        const nextRes = await calendar.events.list({
+          kind: "calendar#event",
+          calendarId: calendarID,
+          orderBy: "startTime",
+          singleEvents: true,
+          maxResults: 20,
+          pageToken: token
+        });
+
+        // console.log(`[resultItems.length]: ${resultItems.length}\n[nextRes.data.items.length]: ${nextRes.data.items.length}`);
+        resultItems = await [...resultItems, ...nextRes.data.items];
+        // console.log(`[AFTER CONCAT - resultItems.length]: ${resultItems.length}`);
+
+        if(nextRes.data.nextPageToken !== undefined) {
+          await nextPage(nextRes.data.nextPageToken);
+        }
+        return
+      }
+
+      if(res.data.nextPageToken !== undefined) {
+        // console.log('START OF THE PAGE TOKENS');
+        // console.log(`[res.data.nextPageToken]`, res.data.nextPageToken);
+        await nextPage(res.data.nextPageToken); // run the query again and concat to existing array
+      }
 
       let existingCalendarEvents = [];
       let existingDuplicates = [];
-      if(res.data.items.length > 0) {
-        await res.data.items.map(async (item) => {
+      if(resultItems.length > 0) {
+        await resultItems.map(async (item) => {
           var eventDetails = {
             id: item.id,
             iCalUID: item.iCalUID,
@@ -57,14 +87,20 @@ module.exports = {
         let prevStartTime;
         // remove duplicate entries with same start time
         await existingCalendarEvents.map(async (existingEvent) => {
+
+
+
           if(_.isEqual(existingEvent.start, prevStartTime)) {
             // push id of duplicate to existingDuplicates
             await existingDuplicates.push(existingEvent.id);
+            // await existingDuplicates.push(existingEvent);
           }
           prevStartTime = existingEvent.start;
         });
         existingCalendarEvents = await existingCalendarEvents.filter(item => !existingDuplicates.includes(item.id));
       }
+
+      // await console.log(`[existingCalendarEvents]`, existingCalendarEvents);
 
       prevRows = rows; // set current rows to equal prevRows
 
@@ -161,6 +197,7 @@ module.exports = {
       let _diffStartTimeEvent = [];
       let _other = [];
       let _checkEvent = [];
+
 
       // console.log(`[existingCalendarEvents.length]`, existingCalendarEvents.length);
 
@@ -394,11 +431,11 @@ module.exports = {
       let deleteTheseEvents = await mightDeleteTheseEvents.filter(item => !_eventExistsIds.includes(item));
 
 
-      let dontDeleteEvents = [];
 
-      // console.log(`[_sameStartTimeEvent.length]`, _sameStartTimeEvent.length);
 
       // dont delete any that are in the update array
+      let dontDeleteEvents = [];
+      // console.log(`[_sameStartTimeEvent.length]`, _sameStartTimeEvent.length);
       if(_sameStartTimeEvent.length > 0) {
         await _sameStartTimeEvent.map(async (sameStartTimeEvent) => {
           await deleteTheseEvents.map(async (eventId) => {
@@ -413,9 +450,34 @@ module.exports = {
       }
 
 
+
+
+      // add the event info into Remove object
+      var prepRemoveArray = await deleteTheseEvents.concat(existingDuplicates); // these should be all events to delete
+      var newRemoveArrayWithObjects = [];
+      if(prepRemoveArray.length > 0) {
+        await resultItems.map(async (existingEvent) => {
+          await prepRemoveArray.map(async (removeEventId) => {
+            if(existingEvent.id === removeEventId) {
+              await newRemoveArrayWithObjects.push({
+                removeEventId: removeEventId,
+                eventDetails: existingEvent
+              });
+            }
+          })
+        });
+      }
+      // console.log(`[newRemoveArrayWithObjects]`, newRemoveArrayWithObjects);
+
+
       var insertArray = await _diffStartTimeEvent.concat(_newEvents); // these should be brand new entries
       var updateArray = _sameStartTimeEvent; // these should be events that need updating
-      var removeArray = await deleteTheseEvents.concat(existingDuplicates); // these should be all events to delete
+      var removeArray = newRemoveArrayWithObjects; // these should be all events to delete
+
+
+
+
+      // console.log(`[_eventExists]`, _eventExists);
 
       // console.log(`[insertArray]`, insertArray);
       // console.log(`[updateArray]`, updateArray);
@@ -424,6 +486,7 @@ module.exports = {
       // console.log(`[insertArray.length]`, insertArray.length);
       // console.log(`[updateArray.length]`, updateArray.length);
       // console.log(`[removeArray.length]`, removeArray.length);
+
 
       await insert(auth, insertArray); // send new events to insert.js
       await update(auth, updateArray); // send update events to update.js

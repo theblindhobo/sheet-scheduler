@@ -95,6 +95,8 @@ module.exports = {
         var streamPreview = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channelUser}-${randResolutions[Math.floor(Math.random()*randResolutions.length)]}.jpg?count=${counter}`;
 
         var resPreview = await cachePreview(streamPreview);
+        // wait 2000 milliseconds before continuing
+        await new Promise(resolve => setTimeout(resolve, 2000)); // wait 2000 milliseconds before continuing
 
         counter++;
 
