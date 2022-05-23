@@ -202,13 +202,21 @@ module.exports = {
 
                 // await sendWebhook(); // for testing purposes
               }
-          }).catch(error => {
+          }).catch(async error => {
               if(error.toString().includes('ERROR: 401 Unauthorized - Invalid OAuth token')) {
                 logger.log(`[ONLINE CHECK] Error: Invalid OAuth token`);
-                console.log(`[ONLINE CHECK] Error: Invalid OAuth token`);
+                console.log(`\x1b[33m%s\x1b[0m`, `[ONLINE CHECK]`, `Error: Invalid OAuth token`);
+                if(!webhookCooldown) {
+                  webhookCooldown = true;
+                  // send webhook telling to update OAuth token in .env file
+                  await sendWebhookInvalidOAuth();
+                  setTimeout(() => {
+                    webhookCooldown = false;
+                  }, remindAfterMinutes * 60 * 1000);
+                }
               } else {
                 logger.log(`[ONLINE CHECK] ${error}`);
-                console.log(`[ONLINE CHECK]`, error);
+                console.log(`\x1b[33m%s\x1b[0m`, `[ONLINE CHECK]`, error);
               }
           });
       } catch(err) {

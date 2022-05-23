@@ -485,6 +485,7 @@ module.exports = {
                         switch(column.action) {
                           case 'LIVE':
                           case 'VOD':
+                          case 'ONLINE':
                             let socket = client ? client : 'closed';
                             if(socket == 'closed') {
                               logger.log(`[WEBSOCKET] Couldn't send titles to websocket. Socket is closed.`);
@@ -508,10 +509,8 @@ module.exports = {
                                 console.log(`\x1b[35m%s\x1b[0m`, `\n[WEBSOCKET]`, `Couldn't send titles to websocket. Socket is closed, closing, or reconnecting.`);
                               }
                             }
-                            break;
-                          case 'ONLINE':
                             // turn onOffWebhook Alert to 'ON'
-                            await switchWebhookAlert(sheets, webhookAlertSwitch.index, 'ON');
+                            if(column.action === 'ONLINE') await switchWebhookAlert(sheets, webhookAlertSwitch.index, 'ON');
                             break;
                           case 'OFFLINE':
                             // turn onOffWebhook Alert to 'OFF'
@@ -609,7 +608,8 @@ module.exports = {
                     }
                   } else {
                     if(!isNaN(Date.parse(column.datetime))) {
-                      if(actionArray.includes(column.action) && column.action !== 'ONLINE') {
+                      var onOffArray = ['ONLINE', 'OFFLINE']; // to disclude ONLINE and OFFLINE events from !schedule
+                      if(actionArray.includes(column.action) && !onOffArray.includes(column.action)) {
                         await currSchedule.push(Object.values(column));
                       }
                     }
